@@ -14,8 +14,11 @@
 	let space: any = null
 	let student: any = null
 	let courses: any[] = []
+	let filteredCourses: any[] = []
+	let purchasedCourses: Set<string> = new Set()
 	let loading = true
 	let error = ''
+	let filter = 'all' // 'all', 'free', 'paid', 'purchased', 'unpurchased'
 	
 	onMount(async () => {
 		await loadCoursesData()
@@ -86,6 +89,9 @@
 			
 			console.log('Filtered courses data:', courses)
 			
+			// 購入済みコースを取得
+			await loadPurchasedCourses()
+			
 		} catch (err: any) {
 			error = err.message || 'データの読み込みに失敗しました'
 			console.error('Load courses data error:', err)
@@ -94,12 +100,73 @@
 		}
 	}
 	
+	async function loadPurchasedCourses() {
+		try {
+			const { data: purchases, error: purchaseError } = await supabase
+				.from('course_purchases')
+				.select('course_id')
+				.eq('student_id', data.user.id)
+				.eq('status', 'completed')
+			
+			if (purchaseError) {
+				console.error('Purchase data error:', purchaseError)
+				return
+			}
+			
+			purchasedCourses = new Set(purchases?.map(p => p.course_id) || [])
+		} catch (err) {
+			console.error('Load purchased courses error:', err)
+		}
+	}
 	
 	// コース学習ページへ移動
 	function navigateToCourse(course: any) {
 		// URLのusernameを正しく設定
 		const instructorUsername = space?.instructor?.username || username
 		goto(`/${instructorUsername}/space/${slug}/student/course/${course.id}`)
+	}
+	
+	// 購入ページへ移動
+	function navigateToPurchase(course: any) {
+		const instructorUsername = space?.instructor?.username || username
+		goto(`/${instructorUsername}/space/${slug}/course/${course.id}/purchase`)
+	}
+	
+	// コースの購入状況を確認
+	function isPurchased(courseId: string): boolean {
+		return purchasedCourses.has(courseId)
+	}
+	
+	// 価格をフォーマット
+	function formatCurrency(price: number, currency: string): string {
+		return new Intl.NumberFormat('ja-JP', {
+			style: 'currency',
+			currency: currency || 'JPY'
+		}).format(price)
+	}
+	
+	// フィルタリング処理
+	$: {
+		if (courses.length > 0) {
+			switch (filter) {
+				case 'free':
+					filteredCourses = courses.filter(c => c.is_free)
+					break
+				case 'paid':
+					filteredCourses = courses.filter(c => !c.is_free)
+					break
+				case 'purchased':
+					filteredCourses = courses.filter(c => isPurchased(c.id))
+					break
+				case 'unpurchased':
+					filteredCourses = courses.filter(c => !c.is_free && !isPurchased(c.id))
+					break
+				default:
+					filteredCourses = courses
+			}
+		} else {
+			filteredCourses = []
+		}
 	}
 </script>
 
@@ -119,7 +186,37 @@
 <div>
 	<div class="mb-8">
 		<h2 class="text-2xl font-bold text-gray-900 mb-2">コース一覧</h2>
-		<p class="text-gray-600">このスペースで学習できるコースを表示しています</p>
+		<p class="text-gray-600 mb-4">このスペースで学習できるコースを表示しています</p>
+		
+		<!-- フィルタータブ -->
+		{#if courses.length > 0}
+			<div class="flex flex-wrap gap-2 mt-4">
+				<button
+					on:click={() => filter = 'all'}
+					class="px-3 py-1 rounded-full text-sm font-medium transition-colors {filter === 'all' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
+				>
+					すべて ({courses.length})
+				</button>
+				<button
+					on:click={() => filter = 'purchased'}
+					class="px-3 py-1 rounded-full text-sm font-medium transition-colors {filter === 'purchased' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
+				>
+					購入済み ({courses.filter(c => isPurchased(c.id)).length})
+				</button>
+				<button
+					on:click={() => filter = 'free'}
+					class="px-3 py-1 rounded-full text-sm font-medium transition-colors {filter === 'free' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
+				>
+					無料 ({courses.filter(c => c.is_free).length})
+				</button>
+				<button
+					on:click={() => filter = 'unpurchased'}
+					class="px-3 py-1 rounded-full text-sm font-medium transition-colors {filter === 'unpurchased' ? 'bg-blue-600 text-white' : 'bg-gray-100 text-gray-700 hover:bg-gray-200'}"
+				>
+					未購入 ({courses.filter(c => !c.is_free && !isPurchased(c.id)).length})
+				</button>
+			</div>
+		{/if}
 	</div>
 	
 	{#if loading}
@@ -143,8 +240,19 @@
 	{:else}
 		<!-- コースカードのグリッド（3カラム） -->
 		<div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
-			{#each courses as course}
-				<div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden">
+			{#each filteredCourses as course}
+				<div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow duration-200 overflow-hidden relative">
+					<!-- 購入済みオーバーレイ -->
+					{#if isPurchased(course.id)}
+						<div class="absolute top-4 right-4 z-10">
+							<div class="bg-blue-600 text-white px-2 py-1 rounded-full text-xs font-medium flex items-center">
+								<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+								</svg>
+								購入済み
+							</div>
+						</div>
+					{/if}
 					<!-- コース画像 -->
 					{#if course.thumbnail_url}
 						<img 
@@ -164,15 +272,19 @@
 					<div class="p-6">
 						<!-- ステータスバッジ -->
 						<div class="flex items-center justify-between mb-3">
-							<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-								公開中
-							</span>
+							<div class="flex items-center space-x-2">
+								<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+									公開中
+								</span>
+								{#if isPurchased(course.id)}
+									<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+										購入済み
+									</span>
+								{/if}
+							</div>
 							{#if course.price && !course.is_free}
 								<span class="text-sm font-medium text-gray-900">
-									{new Intl.NumberFormat('ja-JP', {
-										style: 'currency',
-										currency: course.currency || 'JPY'
-									}).format(course.price)}
+									{formatCurrency(course.price, course.currency)}
 								</span>
 							{:else}
 								<span class="text-sm font-medium text-green-600">
@@ -194,12 +306,54 @@
 						{/if}
 						
 						<!-- アクションボタン -->
-						<button
-							on:click={() => navigateToCourse(course)}
-							class="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
-						>
-							コースを受講する
-						</button>
+						{#if course.is_free || isPurchased(course.id)}
+							<!-- 無料コースまたは購入済みコース -->
+							<button
+								on:click={() => navigateToCourse(course)}
+								class="w-full py-2 px-4 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors font-medium text-sm"
+							>
+								{#if isPurchased(course.id)}
+									コースを受講する
+								{:else}
+									無料で受講開始
+								{/if}
+							</button>
+						{:else}
+							<!-- 有料コース（未購入） -->
+							<div class="space-y-2">
+								{#if course.stripe_price_id}
+									<!-- Stripe決済が設定されている場合 -->
+									<button
+										on:click={() => navigateToPurchase(course)}
+										class="w-full py-2 px-4 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors font-medium text-sm flex items-center justify-center"
+									>
+										<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 10h18M7 15h1m4 0h1m-7 4h12a3 3 0 003-3V8a3 3 0 00-3-3H6a3 3 0 00-3 3v8a3 3 0 003 3z"/>
+										</svg>
+										{formatCurrency(course.price, course.currency)} で購入
+									</button>
+									<button
+										on:click={() => navigateToCourse(course)}
+										class="w-full py-2 px-4 bg-gray-100 text-gray-700 border border-gray-300 rounded-lg hover:bg-gray-200 transition-colors font-medium text-sm"
+									>
+										詳細を見る
+									</button>
+								{:else}
+									<!-- Stripe決済が未設定の場合 -->
+									<div class="text-center">
+										<button
+											disabled
+											class="w-full py-2 px-4 bg-gray-300 text-gray-500 rounded-lg cursor-not-allowed font-medium text-sm"
+										>
+											購入設定準備中
+										</button>
+										<p class="text-xs text-gray-500 mt-1">
+											講師が決済設定を完了するまでお待ちください
+										</p>
+									</div>
+								{/if}
+							</div>
+						{/if}
 					</div>
 				</div>
 			{/each}

@@ -35,6 +35,15 @@
 	
 	async function loadCourse() {
 		try {
+			// 現在のユーザーを取得
+			const { data: { user } } = await supabase.auth.getUser()
+			
+			if (!user) {
+				error = 'ログインが必要です'
+				goto('/login')
+				return
+			}
+			
 			const { data: courseData, error: courseError } = await supabase
 				.from('courses')
 				.select(`
@@ -47,9 +56,46 @@
 			if (courseError) throw courseError
 			if (!courseData) throw new Error('コースが見つかりません')
 			
+			// URLのユーザー名を確認（ユーザー名が自分のものか確認）
+			const { data: profileData, error: profileError } = await supabase
+				.from('profiles')
+				.select('id, username')
+				.eq('username', username)
+				.single()
+			
+			if (profileError || !profileData) {
+				console.error('Profile lookup error:', profileError)
+				goto('/login')
+				return
+			}
+			
+			// URLのユーザー名が自分のものでない場合は、何もしない（他人のコースを見ているだけかもしれない）
+			// 権限チェックは後で行う
+			
 			// 講師の権限チェック
-			if (courseData.space.instructor_id !== data.user.id) {
-				throw new Error('このコースを編集する権限がありません')
+			if (courseData.space.instructor_id !== user.id) {
+				console.log('Permission check failed:', {
+					instructor_id: courseData.space.instructor_id,
+					user_id: user.id,
+					course_title: courseData.title,
+					space_title: courseData.space.title
+				})
+				error = 'このコースを編集する権限がありません'
+				// エラーを表示して、3秒後にリダイレクト
+				setTimeout(async () => {
+					const { data: myProfile } = await supabase
+						.from('profiles')
+						.select('username')
+						.eq('id', user.id)
+						.single()
+					
+					if (myProfile?.username) {
+						goto(`/${myProfile.username}/courses`)
+					} else {
+						goto('/login')
+					}
+				}, 3000)
+				return
 			}
 			
 			course = courseData

@@ -114,15 +114,52 @@
 		}
 		
 		try {
+			// 現在のユーザーを取得
+			const { data: { user } } = await supabase.auth.getUser()
+			
+			if (!user) {
+				alert('ログインが必要です')
+				goto('/login')
+				return
+			}
+			
+			// まず、スペースの所有者であることを確認
+			const { data: spaceData, error: checkError } = await supabase
+				.from('spaces')
+				.select('instructor_id')
+				.eq('id', spaceId)
+				.single()
+			
+			if (checkError) {
+				console.error('Space check error:', checkError)
+				alert(`スペースの確認に失敗しました: ${checkError.message}`)
+				return
+			}
+			
+			if (spaceData.instructor_id !== user.id) {
+				alert('このスペースを削除する権限がありません')
+				return
+			}
+			
+			// スペースを削除
 			const { error: deleteError } = await supabase
 				.from('spaces')
 				.delete()
 				.eq('id', spaceId)
+				.eq('instructor_id', user.id) // 追加の安全確認
 			
-			if (deleteError) throw deleteError
+			if (deleteError) {
+				console.error('Delete error:', deleteError)
+				throw deleteError
+			}
 			
+			// 成功メッセージ
+			alert('スペースが正常に削除されました')
+			
+			// リストを再読み込み
 			await loadSpaces()
 		} catch (err: any) {
+			console.error('Delete space error:', err)
 			alert(`削除に失敗しました: ${err.message}`)
 		}
 	}

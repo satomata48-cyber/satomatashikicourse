@@ -17,6 +17,7 @@
 	let selectedSpace = ''
 	let initialized = false
 	
+	
 	let redirecting = false
 	
 	// リアクティブ文でリダイレクト処理
@@ -325,6 +326,12 @@
 									class="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition-colors"
 								>
 									レッスン管理
+								</a>
+								<a
+									href="/{username}/courses/{course.id}/pricing"
+									class="text-sm bg-yellow-100 text-yellow-700 px-3 py-1 rounded hover:bg-yellow-200 transition-colors"
+								>
+									料金編集
 								</a>
 								<button
 									on:click={() => deleteCourse(course.id)}

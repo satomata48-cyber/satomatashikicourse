@@ -52,3 +52,58 @@ export async function confirmPayment(stripe: any, clientSecret: string, paymentM
 		throw error
 	}
 }
+
+// Stripe Checkout用の関数
+export async function createCheckoutSession(courseId: string, priceId: string) {
+	try {
+		const response = await fetch('/api/stripe/create-checkout', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify({
+				courseId,
+				priceId
+			})
+		})
+
+		if (!response.ok) {
+			const error = await response.json()
+			throw new Error(error.error || 'Checkout session creation failed')
+		}
+
+		return await response.json()
+	} catch (error) {
+		console.error('Checkout session error:', error)
+		throw error
+	}
+}
+
+// 商品作成用の関数
+export async function createStripeProduct(courseData: {
+	courseId: string
+	name: string
+	description: string
+	price: number
+	currency: string
+}) {
+	try {
+		const response = await fetch('/api/stripe/create-product', {
+			method: 'POST',
+			headers: {
+				'Content-Type': 'application/json'
+			},
+			body: JSON.stringify(courseData)
+		})
+
+		if (!response.ok) {
+			const error = await response.json()
+			throw new Error(error.error || 'Product creation failed')
+		}
+
+		return await response.json()
+	} catch (error) {
+		console.error('Product creation error:', error)
+		throw error
+	}
+}
