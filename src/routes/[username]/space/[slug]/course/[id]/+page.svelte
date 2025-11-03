@@ -19,6 +19,7 @@
 	let hasAccess = false
 	let loading = true
 	let error = ''
+	let themeColor = '#3B82F6' // デフォルト: blue-600
 	
 	onMount(async () => {
 		await loadCourseData()
@@ -75,7 +76,12 @@
 			
 			if (spaceError) throw spaceError
 			space = spaceData
-			
+
+			// テーマカラーを設定
+			if (space?.landing_page_content?.theme?.primaryColor) {
+				themeColor = space.landing_page_content.theme.primaryColor
+			}
+
 			// 生徒登録状況を確認（認証されている場合のみ）
 			let currentUser = null
 			try {
@@ -249,7 +255,8 @@
 		}
 	})()
 	
-	$: theme = coursePageContent.theme || space?.landing_page_content?.theme || { primaryColor: '#3B82F6', accentColor: '#F59E0B' }
+	// スペースのテーマを優先し、course_page_contentのテーマは使用しない
+	$: theme = space?.landing_page_content?.theme || { primaryColor: '#3B82F6', accentColor: '#F59E0B' }
 </script>
 
 <svelte:head>
@@ -279,7 +286,7 @@
 				<div class="flex justify-between items-center">
 					<!-- 左側：スペース名とコース名 -->
 					<div class="flex items-center space-x-2">
-						<div class="w-8 h-8 bg-blue-600 rounded-lg flex items-center justify-center">
+						<div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background-color: {themeColor}">
 							<span class="text-white font-bold text-sm">{space.title.charAt(0)}</span>
 						</div>
 						<div class="flex items-center space-x-2 text-sm text-gray-600">
@@ -306,15 +313,16 @@
 							</a>
 						{:else}
 							<!-- 未ログインの場合 -->
-							<button 
+							<button
 								on:click={() => window.location.href = `/${username}/space/${slug}/login`}
 								class="text-gray-600 hover:text-gray-900 font-medium transition-colors"
 							>
 								ログイン
 							</button>
-							<a 
-								href="/{username}/space/{slug}/enroll" 
-								class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+							<a
+								href="/{username}/space/{slug}/enroll"
+								class="text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
+								style="background-color: {themeColor}"
 							>
 								生徒登録
 							</a>
@@ -433,7 +441,106 @@
 				</div>
 			</div>
 		</header>
-		
+
+		<!-- カスタムセクション（page-editorで編集） -->
+		{#if coursePageContent.sections && coursePageContent.sections.length > 0}
+			{#each coursePageContent.sections as section}
+				<div class="border-b border-gray-100 last:border-b-0">
+					{#if section.type === 'overview' || section.type === 'prerequisites' || section.type === 'target-audience' || section.type === 'text'}
+						<!-- テキストセクション -->
+						<section class="py-12" style="background-color: {section.backgroundColor || '#ffffff'}; color: {section.textColor || '#111827'}">
+							<div class="container mx-auto px-6">
+								<div class="max-w-4xl mx-auto">
+									<h2 class="text-3xl font-bold mb-6">{section.title}</h2>
+									<div class="text-lg opacity-90 whitespace-pre-line">{section.content}</div>
+								</div>
+							</div>
+						</section>
+					{:else if section.type === 'learning-outcomes' || section.type === 'features'}
+						<!-- 特徴リスト -->
+						<section class="py-12" style="background-color: {section.backgroundColor || '#ffffff'}">
+							<div class="container mx-auto px-6">
+								<div class="max-w-5xl mx-auto">
+									<h2 class="text-3xl font-bold text-center mb-10" style="color: {section.textColor || '#111827'}">{section.title}</h2>
+									<div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+										{#each section.features || [] as feature}
+											<div class="flex items-start space-x-4 bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-100">
+												<div class="flex-shrink-0 w-14 h-14 rounded-lg flex items-center justify-center text-2xl" style="background-color: {theme.primaryColor}20">
+													<span>{feature.icon}</span>
+												</div>
+												<div class="flex-1 min-w-0">
+													<h3 class="text-lg font-bold text-gray-900 mb-2">{feature.title}</h3>
+													<p class="text-sm text-gray-600">{feature.description}</p>
+												</div>
+											</div>
+										{/each}
+									</div>
+								</div>
+							</div>
+						</section>
+					{:else if section.type === 'image-text'}
+						<!-- 画像+テキスト -->
+						<section class="py-12" style="background-color: {section.backgroundColor || '#ffffff'}">
+							<div class="container mx-auto px-6">
+								<div class="max-w-4xl mx-auto">
+									<h2 class="text-3xl font-bold mb-6" style="color: {section.textColor || '#111827'}">{section.title}</h2>
+									{#if section.imageUrl}
+										<img src={section.imageUrl} alt={section.title} class="w-full h-64 object-cover rounded-lg mb-6" />
+									{/if}
+									<p class="text-lg opacity-90 whitespace-pre-line" style="color: {section.textColor || '#111827'}">{section.content}</p>
+								</div>
+							</div>
+						</section>
+					{:else if section.type === 'faq'}
+						<!-- FAQ -->
+						<section class="py-12" style="background-color: {section.backgroundColor || '#ffffff'}">
+							<div class="container mx-auto px-6">
+								<div class="max-w-3xl mx-auto">
+									<h2 class="text-3xl font-bold mb-8 text-center" style="color: {section.textColor || '#111827'}">{section.title}</h2>
+									<div class="space-y-4">
+										{#each section.content.split('\n\n') as qa}
+											<div class="p-4 rounded-lg bg-gray-50 border border-gray-200">
+												<p class="text-sm whitespace-pre-line" style="color: {section.textColor || '#111827'}">{qa}</p>
+											</div>
+										{/each}
+									</div>
+								</div>
+							</div>
+						</section>
+					{:else if section.type === 'cta'}
+						<!-- CTA -->
+						<section class="py-16" style="background-color: {section.backgroundColor || '#ffffff'}">
+							<div class="container mx-auto px-6">
+								<div class="text-center max-w-3xl mx-auto">
+									<h2 class="text-4xl font-bold mb-4" style="color: {section.textColor || '#111827'}">{section.title}</h2>
+									<p class="text-xl mb-8 opacity-90" style="color: {section.textColor || '#111827'}">{section.content}</p>
+									{#if section.buttonText}
+										<a
+											href={section.buttonUrl || `/${username}/space/${slug}/course/${courseId}/purchase`}
+											class="inline-block px-8 py-4 rounded-lg font-semibold text-white text-lg hover:opacity-90 transition-opacity"
+											style="background-color: {theme.primaryColor}"
+										>
+											{section.buttonText}
+										</a>
+									{/if}
+								</div>
+							</div>
+						</section>
+					{:else}
+						<!-- デフォルト -->
+						<section class="py-12" style="background-color: {section.backgroundColor || '#ffffff'}">
+							<div class="container mx-auto px-6">
+								<div class="max-w-4xl mx-auto">
+									<h2 class="text-3xl font-bold mb-6" style="color: {section.textColor || '#111827'}">{section.title}</h2>
+									<p class="text-lg opacity-90 whitespace-pre-line" style="color: {section.textColor || '#111827'}">{section.content}</p>
+								</div>
+							</div>
+						</section>
+					{/if}
+				</div>
+			{/each}
+		{/if}
+
 		<!-- レッスン一覧 -->
 		<section class="py-16">
 			<div class="container mx-auto px-6">
@@ -478,7 +585,7 @@
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
 													</svg>
 												{:else if progress > 0}
-													<div class="w-3 h-3 bg-blue-600 rounded-full"></div>
+													<div class="w-3 h-3 rounded-full" style="background-color: {themeColor}"></div>
 												{:else}
 													<span class="text-sm text-gray-600 font-medium">{index + 1}</span>
 												{/if}
@@ -503,7 +610,7 @@
 																{formatDuration(lesson.duration)}
 															</span>
 															{#if progress > 0}
-																<span class="text-blue-600">{progress}% 完了</span>
+																<span style="color: {themeColor}">{progress}% 完了</span>
 															{/if}
 														</div>
 													</div>
@@ -513,7 +620,8 @@
 														{#if canAccess}
 															<a
 																href="/{username}/space/{slug}/course/{courseId}/lesson/{lesson.id}"
-																class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+																class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white hover:opacity-90 transition-opacity"
+																style="background-color: {themeColor}"
 															>
 																{progress > 0 ? '続ける' : '開始'}
 																<svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -540,48 +648,7 @@
 				</div>
 			</div>
 		</section>
-		
-		<!-- カスタムセクション表示 -->
-		{#each coursePageContent.sections as section}
-			{#if section.type === 'features'}
-				<section class="py-16 bg-gray-50">
-					<div class="container mx-auto px-6">
-						<div class="max-w-6xl mx-auto">
-							<h2 class="text-3xl font-bold text-gray-900 text-center mb-12">{section.content.title}</h2>
-							<div class="grid grid-cols-1 md:grid-cols-3 gap-8">
-								{#each section.content.features as feature}
-									<div class="text-center p-6 bg-white rounded-lg shadow-md">
-										<div class="mx-auto h-12 w-12 text-blue-600 mb-4">
-											{#if feature.icon === 'academic-cap'}
-												<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="h-12 w-12">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l9-5-9-5-9 5 9 5z"/>
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 14l6.16-3.422a12.083 12.083 0 01.665 6.479A11.952 11.952 0 0012 20.055a11.952 11.952 0 00-6.824-2.998 12.078 12.078 0 01.665-6.479L12 14z"/>
-												</svg>
-											{:else if feature.icon === 'user-group'}
-												<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="h-12 w-12">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-												</svg>
-											{:else if feature.icon === 'shield-check'}
-												<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="h-12 w-12">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.031 9-11.622 0-1.042-.133-2.052-.382-3.016z"/>
-												</svg>
-											{:else}
-												<svg fill="none" stroke="currentColor" viewBox="0 0 24 24" class="h-12 w-12">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"/>
-												</svg>
-											{/if}
-										</div>
-										<h3 class="text-xl font-semibold text-gray-900 mb-2">{feature.title}</h3>
-										<p class="text-gray-600">{feature.description}</p>
-									</div>
-								{/each}
-							</div>
-						</div>
-					</div>
-				</section>
-			{/if}
-		{/each}
-		
+
 		<!-- フッター CTA -->
 		<section 
 			class="py-16 text-white"

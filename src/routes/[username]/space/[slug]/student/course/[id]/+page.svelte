@@ -400,9 +400,9 @@
 							</div>
 						{/if}
 					{:else if currentView === 'lesson' && selectedLesson}
-						<!-- レッスン内容表示 - 動画優先レイアウト -->
-						
-						<!-- 動画プレイヤーエリア（最優先表示） -->
+						<!-- レッスン内容表示 -->
+
+						<!-- 動画プレイヤーエリア -->
 						{#if selectedLesson.video_url}
 							<!-- YouTube埋め込み動画プレイヤー -->
 							{@const embedUrl = getYouTubeEmbedUrl(selectedLesson.video_url)}
@@ -420,9 +420,9 @@
 							{:else}
 								<!-- YouTube以外の動画URL -->
 								<div class="aspect-video bg-black rounded-lg mb-4 flex items-center justify-center">
-									<a 
-										href={selectedLesson.video_url} 
-										target="_blank" 
+									<a
+										href={selectedLesson.video_url}
+										target="_blank"
 										rel="noopener noreferrer"
 										class="text-white hover:text-blue-300 underline"
 									>
@@ -430,16 +430,6 @@
 									</a>
 								</div>
 							{/if}
-						{:else}
-							<!-- 動画がない場合のプレースホルダー -->
-							<div class="aspect-video bg-gray-200 rounded-lg mb-4 flex items-center justify-center">
-								<div class="text-center">
-									<svg class="mx-auto h-16 w-16 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1m4 0h1m-6 4h2m6 0h2M8 21l4-7 4 7M3 4h18M4 4h16v12a1 1 0 01-1 1H5a1 1 0 01-1-1V4z"/>
-									</svg>
-									<p class="text-gray-600">動画コンテンツがありません</p>
-								</div>
-							</div>
 						{/if}
 						
 						<!-- レッスン完了ボタン -->
@@ -481,9 +471,9 @@
 						<!-- レッスンタイトルとナビゲーション -->
 						<div class="flex items-center justify-between mb-4">
 							<div class="flex-1">
-								<h2 class="text-xl font-bold text-gray-900">{selectedLesson.title}</h2>
+								<h2 class="text-2xl font-bold text-gray-900">{selectedLesson.title}</h2>
 								{#if selectedLesson.description}
-									<p class="text-gray-600 text-sm mt-1">{selectedLesson.description}</p>
+									<p class="text-gray-600 mt-2">{selectedLesson.description}</p>
 								{/if}
 							</div>
 							<button
@@ -496,36 +486,33 @@
 								概要に戻る
 							</button>
 						</div>
-						
-						<!-- レッスンアクション（コンパクト） -->
-						<div class="flex items-center justify-between mb-6">
+
+						<!-- レッスン詳細コンテンツ -->
+						{#if selectedLesson.content}
+							<div class="border-t border-gray-200 pt-6 pb-6">
+								<div class="prose max-w-none">
+									<div class="text-gray-800 leading-relaxed whitespace-pre-line text-base">
+										{selectedLesson.content}
+									</div>
+								</div>
+							</div>
+						{/if}
+
+						<!-- レッスンアクション -->
+						<div class="flex items-center justify-between pt-4 border-t border-gray-200">
 							<button
 								class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
 								disabled
 							>
 								← 前のレッスン
 							</button>
-							
+
 							<button
 								class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
 							>
 								完了して次へ →
 							</button>
 						</div>
-						
-						<!-- レッスン詳細コンテンツ（折りたたみ可能） -->
-						{#if selectedLesson.content}
-							<div class="border-t border-gray-200 pt-4">
-								<details class="group">
-									<summary class="cursor-pointer text-lg font-semibold text-gray-900 mb-3 hover:text-blue-600">
-										📝 レッスン詳細内容
-									</summary>
-									<div class="text-gray-700 leading-relaxed whitespace-pre-line mt-3 pl-4 border-l-2 border-blue-100">
-										{selectedLesson.content}
-									</div>
-								</details>
-							</div>
-						{/if}
 					{/if}
 				</div>
 			</div>

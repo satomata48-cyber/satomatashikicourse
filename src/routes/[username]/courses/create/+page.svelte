@@ -22,7 +22,6 @@
 		isFree: true,
 		price: 0,
 		currency: 'JPY',
-		estimatedDurationHours: 1,
 		isPublished: false
 	}
 	let loading = false
@@ -144,14 +143,13 @@
 		}
 		
 		// 同一スペース内での重複チェック
-		const { data: existingCourse } = await supabase
+		const { data: existingCourses } = await supabase
 			.from('courses')
 			.select('id')
 			.eq('space_id', formData.spaceId)
 			.eq('slug', formData.slug)
-			.single()
-		
-		if (existingCourse) {
+
+		if (existingCourses && existingCourses.length > 0) {
 			slugError = 'このスラッグは既に使用されています'
 			return false
 		}
@@ -163,26 +161,40 @@
 	async function handleSubmit() {
 		loading = true
 		error = ''
-		
+
 		try {
 			if (!formData.spaceId) {
 				throw new Error('スペースを選択してください')
 			}
-			
-			// 現在のスキーマではslugカラムがないため、バリデーションをスキップ
-			// const isValidSlug = await validateSlug()
-			// if (!isValidSlug) {
-			// 	loading = false
-			// 	return
-			// }
-			
-			// スラッグを生成
-			const slug = formData.title
-				.toLowerCase()
-				.replace(/[^\w\s-]/g, '')
-				.replace(/\s+/g, '-')
-				.replace(/--+/g, '-')
-				.trim()
+
+			if (!formData.title.trim()) {
+				throw new Error('コース名を入力してください')
+			}
+
+			// スラッグバリデーション
+			const isValidSlug = await validateSlug()
+			if (!isValidSlug) {
+				loading = false
+				return
+			}
+
+			// スラッグを生成（フォームで編集されたものを使用）
+			let slug = formData.slug.trim()
+
+			// slugが空の場合は、タイトルから生成
+			if (!slug) {
+				slug = formData.title
+					.toLowerCase()
+					.replace(/[^\w\s-]/g, '')
+					.replace(/\s+/g, '-')
+					.replace(/--+/g, '-')
+					.trim()
+			}
+
+			// それでも空の場合はUUIDの一部を使用
+			if (!slug) {
+				slug = `course-${Date.now()}`
+			}
 
 			const courseData = {
 				space_id: formData.spaceId,
@@ -194,52 +206,12 @@
 				currency: formData.currency,
 				is_published: formData.isPublished,
 				course_page_content: {
-					sections: [
-						{
-							id: 'hero',
-							type: 'hero',
-							content: {
-								title: formData.title,
-								subtitle: formData.description || 'このコースで新しいスキルを習得しましょう',
-								backgroundImage: null
-							}
-						},
-						{
-							id: 'features',
-							type: 'features',
-							content: {
-								title: 'コース特徴',
-								features: [
-									{
-										title: '実践的な内容',
-										description: '現場で使える実践的なスキルを身に付けます',
-										icon: 'academic-cap'
-									},
-									{
-										title: 'わかりやすい解説',
-										description: '初心者にもわかりやすい丁寧な解説',
-										icon: 'user-group'
-									},
-									{
-										title: 'サポート充実',
-										description: '学習をしっかりとサポートします',
-										icon: 'shield-check'
-									}
-								]
-							}
-						}
-					],
+					sections: [],
 					metadata: {
 						title: formData.title,
 						description: formData.description || `${formData.title}で新しいスキルを習得`,
 						seoTitle: `${formData.title} | オンラインコース`,
 						seoDescription: formData.description || `${formData.title}で新しいスキルを身に付けませんか？`
-					},
-					theme: {
-						primaryColor: '#3B82F6',
-						accentColor: '#F59E0B',
-						backgroundColor: '#F9FAFB',
-						textColor: '#111827'
 					}
 				}
 			}
@@ -349,38 +321,48 @@
 						<label for="slug" class="block text-sm font-medium text-gray-700 mb-2">
 							スラッグ (URL用) *
 						</label>
-						<input
-							id="slug"
-							type="text"
-							bind:value={formData.slug}
-							on:blur={validateSlug}
-							required
-							class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-							placeholder="javascript-basics"
-						/>
-						{#if slugError}
-							<p class="mt-1 text-sm text-red-600">{slugError}</p>
-						{:else}
-							<p class="mt-1 text-sm text-gray-500">
-								英数字、アンダースコア、ハイフンのみ使用可能です
-							</p>
-						{/if}
+						{#key formData.spaceId}
+							{@const selectedSpace = spaces.find(s => s.id === formData.spaceId)}
+							<div class="flex items-center border border-gray-300 rounded-lg overflow-hidden focus-within:ring-2 focus-within:ring-blue-500 focus-within:border-transparent">
+								<!-- スペースのslugプレフィックス -->
+								<div class="px-3 py-2 bg-gray-100 text-gray-600 text-sm border-r border-gray-300 whitespace-nowrap">
+									{#if selectedSpace}
+										/{username}/space/{selectedSpace.slug}/course/
+									{:else}
+										/[username]/space/[space-slug]/course/
+									{/if}
+								</div>
+								<!-- スラッグ入力 -->
+								<input
+									id="slug"
+									type="text"
+									bind:value={formData.slug}
+									on:blur={validateSlug}
+									required
+									class="flex-1 px-3 py-2 border-0 focus:ring-0 focus:outline-none"
+									placeholder="your-course-slug"
+								/>
+							</div>
+							{#if slugError}
+								<p class="mt-1 text-sm text-red-600">{slugError}</p>
+							{:else}
+								<p class="mt-1 text-sm text-gray-500">
+									英数字、アンダースコア、ハイフンのみ使用可能です
+								</p>
+							{/if}
+							{#if formData.spaceId && formData.slug && selectedSpace}
+								<div class="mt-2 p-2 bg-blue-50 border border-blue-200 rounded">
+									<p class="text-xs text-blue-700 font-medium mb-1">完全なURL:</p>
+									<p class="text-sm text-blue-900 break-all font-mono">
+										{window.location.origin}/{username}/space/{selectedSpace.slug}/course/{formData.slug}
+									</p>
+								</div>
+							{/if}
+						{/key}
 					</div>
-					
-					<div>
-						<label for="estimatedDurationHours" class="block text-sm font-medium text-gray-700 mb-2">
-							推定学習時間（時間）
-						</label>
-						<input
-							id="estimatedDurationHours"
-							type="number"
-							bind:value={formData.estimatedDurationHours}
-							min="1"
-							max="1000"
-							class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-						/>
-					</div>
-					
+
+					<!-- 推定学習時間フィールドは削除（データベースにカラムが存在しないため） -->
+
 					<!-- 価格設定 -->
 					<div class="border-t border-gray-200 pt-6">
 						<h3 class="text-lg font-medium text-gray-900 mb-4">価格設定</h3>

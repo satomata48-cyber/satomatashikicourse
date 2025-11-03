@@ -16,6 +16,7 @@
 	let error = ''
 	let selectedSpace = ''
 	let initialized = false
+	let themeColor = '#3B82F6' // デフォルト: blue-600
 	
 	
 	let redirecting = false
@@ -121,10 +122,10 @@
 				return
 			}
 			
-			// スペース一覧を取得
+			// スペース一覧を取得（テーマカラーも含む）
 			const { data: spacesData, error: spacesError } = await supabase
 				.from('spaces')
-				.select('id, title, slug')
+				.select('id, title, slug, landing_page_content')
 				.eq('instructor_id', instructorData.id)
 				.order('created_at', { ascending: false })
 			
@@ -146,7 +147,25 @@
 		try {
 			const spaceIds = spaces.map(s => s.id)
 			if (spaceIds.length === 0) return
-			
+
+			// テーマカラーを更新
+			if (selectedSpace) {
+				const selectedSpaceData = spaces.find(s => s.id === selectedSpace)
+				if (selectedSpaceData?.landing_page_content?.theme?.primaryColor) {
+					themeColor = selectedSpaceData.landing_page_content.theme.primaryColor
+				} else {
+					themeColor = '#3B82F6' // デフォルト
+				}
+			} else {
+				// 最初のスペースのテーマカラーを使用
+				const firstSpace = spaces[0]
+				if (firstSpace?.landing_page_content?.theme?.primaryColor) {
+					themeColor = firstSpace.landing_page_content.theme.primaryColor
+				} else {
+					themeColor = '#3B82F6' // デフォルト
+				}
+			}
+
 			let query = supabase
 				.from('courses')
 				.select(`
@@ -156,17 +175,17 @@
 				`)
 				.in('space_id', spaceIds)
 				.order('created_at', { ascending: false })
-			
+
 			// スペースフィルタリング
 			if (selectedSpace) {
 				query = query.eq('space_id', selectedSpace)
 			}
-			
+
 			const { data: coursesData, error: coursesError } = await query
-			
+
 			if (coursesError) throw coursesError
 			courses = coursesData || []
-			
+
 		} catch (err: any) {
 			error = err.message
 			console.error('Load courses error:', err)
@@ -213,7 +232,8 @@
 		<h2 class="text-2xl font-bold text-gray-900">コース管理</h2>
 		<a
 			href="/{username}/courses/create"
-			class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
+			class="text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
+			style="background-color: {themeColor}"
 		>
 			新規コース作成
 		</a>
@@ -273,7 +293,8 @@
 			<p class="text-gray-600 mb-6">最初のコースを作成しましょう。</p>
 			<a
 				href="/{username}/courses/create"
-				class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
+				class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white hover:opacity-90 transition-opacity"
+				style="background-color: {themeColor}"
 			>
 				新規コース作成
 			</a>
@@ -305,7 +326,7 @@
 							</div>
 							<div class="flex space-x-2 ml-4">
 								<a
-									href="/{username}/space/{course.space?.slug}/course/{course.slug || course.id}"
+									href="/{username}/space/{course.space.slug}/course/{course.slug || course.id}"
 									target="_blank"
 									class="text-sm bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors"
 									title="公開コースページを新しいタブで開く"
@@ -316,19 +337,26 @@
 									コースページ
 								</a>
 								<a
-									href="/{username}/courses/{course.id}/edit"
+									href="/{username}/courses/{course.slug || course.id}/edit"
 									class="text-sm bg-gray-100 text-gray-700 px-3 py-1 rounded hover:bg-gray-200 transition-colors"
 								>
-									編集
+									コース編集
 								</a>
 								<a
-									href="/{username}/courses/{course.id}/lessons"
+									href="/{username}/courses/{course.slug || course.id}/page-editor"
+									class="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded hover:bg-purple-200 transition-colors"
+									title="コース詳細ページのコンテンツを編集"
+								>
+									ページ編集
+								</a>
+								<a
+									href="/{username}/courses/{course.slug || course.id}/lessons"
 									class="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition-colors"
 								>
 									レッスン管理
 								</a>
 								<a
-									href="/{username}/courses/{course.id}/pricing"
+									href="/{username}/courses/{course.slug || course.id}/pricing"
 									class="text-sm bg-yellow-100 text-yellow-700 px-3 py-1 rounded hover:bg-yellow-200 transition-colors"
 								>
 									料金編集

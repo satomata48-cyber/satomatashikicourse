@@ -1,507 +1,1275 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
-	import { page } from '$app/stores'
-	import { goto } from '$app/navigation'
 	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
+
 	const supabase = createSupabaseBrowserClient()
-	
-	$: username = $page.params.username
-	$: slug = $page.params.slug
-	
+
 	let space: any = null
 	let loading = true
 	let saving = false
 	let error = ''
 	let saveMessage = ''
-	let editingSection = null
-	let showSectionModal = false
-	
-	// ページ設定
-	let pageSettings = {
-		title: '',
-		description: '',
-		theme: {
-			primaryColor: '#3B82F6',
-			accentColor: '#F59E0B',
-			backgroundColor: '#F9FAFB',
-			textColor: '#111827'
-		},
-		hero: {
-			enabled: true,
-			title: '',
-			subtitle: '',
-			ctaText: 'スペースを見る',
-			ctaUrl: ''
-		},
-		sections: []
+
+	// セクションの型定義
+	interface Section {
+		id: string
+		type: string
+		title: string
+		content: string
+		imageUrl?: string
+		buttonText?: string
+		buttonUrl?: string
+		backgroundColor?: string
+		textColor?: string
+		instructorProfileId?: string  // 講師プロフィールID
+		features?: Array<{
+			icon: string
+			title: string
+			description: string
+		}>
 	}
-	
+
+	// ページ設定
+	let title = ''
+	let description = ''
+	let sections: Section[] = []
+	let themeColor = '#2563eb' // デフォルト: マテリアルブルー
+	let instructorProfiles: any[] = [] // 講師プロフィール一覧
+
+	// 削除確認モーダル
+	let showDeleteModal = false
+	let deleteTargetIndex: number | null = null
+
+	// テーマカラーのプリセット
+	const colorPresets = [
+		{ name: 'ブルー', color: '#2563eb' },
+		{ name: 'インディゴ', color: '#4f46e5' },
+		{ name: 'パープル', color: '#7c3aed' },
+		{ name: 'ピンク', color: '#db2777' },
+		{ name: 'レッド', color: '#dc2626' },
+		{ name: 'オレンジ', color: '#ea580c' },
+		{ name: 'イエロー', color: '#ca8a04' },
+		{ name: 'グリーン', color: '#16a34a' },
+		{ name: 'ティール', color: '#0d9488' },
+		{ name: 'シアン', color: '#0891b2' }
+	]
+
+	// テーマカラー設定モーダル
+	let showThemeModal = false
+
+	// 絵文字ピッカーの状態管理
+	let showEmojiPicker = false
+	let emojiPickerTarget: { sectionIndex: number, featureIndex: number } | null = null
+
+	// セクション開閉状態（デフォルトで全て閉じている）
+	let expandedSections: Set<string> = new Set()
+
+	const commonEmojis = [
+		'⚙️', '👥', '⏰', '✓', '✨', '🎯', '📚', '💡',
+		'🚀', '💪', '🎓', '📝', '🔥', '⭐', '🏆', '💼',
+		'📊', '🎨', '🔧', '📱', '💻', '🌟', '✅', '🎉'
+	]
+
+	function openEmojiPicker(sectionIdx: number, featureIdx: number) {
+		emojiPickerTarget = { sectionIndex: sectionIdx, featureIndex: featureIdx }
+		showEmojiPicker = true
+	}
+
+	function selectEmoji(emoji: string) {
+		if (emojiPickerTarget) {
+			const section = sections[emojiPickerTarget.sectionIndex]
+			if (section.features) {
+				section.features[emojiPickerTarget.featureIndex].icon = emoji
+				sections = [...sections]
+			}
+		}
+		showEmojiPicker = false
+		emojiPickerTarget = null
+	}
+
+	function deleteFeature(sectionIdx: number, featureIdx: number) {
+		const section = sections[sectionIdx]
+		if (section.features) {
+			section.features = section.features.filter((_, idx) => idx !== featureIdx)
+			sections = [...sections]
+		}
+	}
+
+	function toggleSection(sectionId: string) {
+		if (expandedSections.has(sectionId)) {
+			expandedSections.delete(sectionId)
+		} else {
+			expandedSections.add(sectionId)
+		}
+		expandedSections = new Set(expandedSections)
+	}
+
+	// ドラッグ&ドロップ
+	let draggedIndex: number | null = null
+
+	function handleDragStart(event: DragEvent, index: number) {
+		draggedIndex = index
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move'
+		}
+	}
+
+	function handleDragOver(event: DragEvent) {
+		event.preventDefault()
+		if (event.dataTransfer) {
+			event.dataTransfer.dropEffect = 'move'
+		}
+	}
+
+	function handleDrop(event: DragEvent, targetIndex: number) {
+		event.preventDefault()
+		if (draggedIndex !== null && draggedIndex !== targetIndex) {
+			const newSections = [...sections]
+			const [draggedItem] = newSections.splice(draggedIndex, 1)
+			newSections.splice(targetIndex, 0, draggedItem)
+			sections = newSections
+		}
+		draggedIndex = null
+	}
+
+	function handleDragEnd() {
+		draggedIndex = null
+	}
+
+	// セクションテンプレート
+	const templates = [
+		{
+			name: 'ヘッダー',
+			icon: '📌',
+			description: 'ナビゲーションバー',
+			template: {
+				type: 'header',
+				title: 'ヘッダー',
+				content: 'スペース名とナビゲーションを表示',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		},
+		{
+			name: 'ヒーローセクション',
+			icon: '🎯',
+			description: '大きな見出しとCTAボタン',
+			template: {
+				type: 'hero',
+				title: 'あなたのコースタイトル',
+				content: 'このコースで学べることの魅力的な説明を書きましょう',
+				buttonText: '学習を始める',
+				buttonUrl: '#',
+				backgroundColor: '#2563eb',
+				textColor: '#ffffff'
+			}
+		},
+		{
+			name: 'コース一覧',
+			icon: '📚',
+			description: '提供コースの一覧表示',
+			template: {
+				type: 'courses',
+				title: '提供コース',
+				content: '質の高い学習コンテンツをご用意しています',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		},
+		{
+			name: 'テキストセクション',
+			icon: '📝',
+			description: 'シンプルなテキストコンテンツ',
+			template: {
+				type: 'text',
+				title: 'セクションタイトル',
+				content: 'ここに詳細な説明を書きます。複数段落にわたる長い文章も書けます。',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		},
+		{
+			name: '画像+テキスト',
+			icon: '🖼️',
+			description: '画像とテキストを横並び',
+			template: {
+				type: 'image-text',
+				title: '特徴やメリット',
+				content: '画像と一緒に説明を表示します。商品の特徴や使い方を視覚的に伝えられます。',
+				imageUrl: 'https://via.placeholder.com/400x300',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		},
+		{
+			name: '特徴リスト',
+			icon: '✨',
+			description: '箇条書きで特徴を列挙',
+			template: {
+				type: 'features',
+				title: 'このコースの特徴',
+				content: '• 実践的なスキル: すぐに使える知識とテクニック\n• プロフェッショナルな指導: 業界経験豊富な講師による丁寧なサポート\n• 柔軟な学習: 自分のペースで、いつでもどこでも学習可能\n• 実績あるカリキュラム: 多くの受講生が成果を実感',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827',
+				features: [
+					{ icon: '⚙️', title: '実践的なスキル', description: 'すぐに使える知識とテクニック' },
+					{ icon: '👥', title: 'プロフェッショナルな指導', description: '業界経験豊富な講師による丁寧なサポート' },
+					{ icon: '⏰', title: '柔軟な学習', description: '自分のペースで、いつでもどこでも学習可能' },
+					{ icon: '✓', title: '実績あるカリキュラム', description: '多くの受講生が成果を実感' }
+				]
+			}
+		},
+		{
+			name: '講師紹介',
+			icon: '👨‍🏫',
+			description: '講師プロフィールセクション',
+			template: {
+				type: 'instructor',
+				title: '講師紹介',
+				content: '講師のプロフィールと経歴を紹介します',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		},
+		{
+			name: 'CTA (行動喚起)',
+			icon: '🚀',
+			description: '目立つボタンで行動を促す',
+			template: {
+				type: 'cta',
+				title: '今すぐ始めましょう',
+				content: '特別価格で提供中!この機会をお見逃しなく。',
+				buttonText: '無料で始める',
+				buttonUrl: '#',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		},
+		{
+			name: 'FAQ',
+			icon: '❓',
+			description: 'よくある質問',
+			template: {
+				type: 'faq',
+				title: 'よくある質問',
+				content: 'Q: 質問1\nA: 回答1\n\nQ: 質問2\nA: 回答2',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		},
+		{
+			name: 'フッター',
+			icon: '📄',
+			description: 'ページ下部の著作権表示',
+			template: {
+				type: 'footer',
+				title: 'フッター',
+				content: '© 2025 Your Company. All rights reserved.',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		}
+	]
+
 	onMount(async () => {
-		await loadSpaceData()
+		await loadSpace()
 	})
-	
-	async function loadSpaceData() {
+
+	async function loadSpace() {
 		try {
 			const { data: spaceData, error: spaceError } = await supabase
 				.from('spaces')
 				.select('*')
-				.eq('slug', slug)
-				.eq('instructor_id', username)
+				.eq('slug', data.slug)
+				.eq('instructor_id', data.user.id)
 				.single()
-			
+
 			if (spaceError) throw spaceError
+
 			space = spaceData
-			
-			// 既存のランディングページ設定を読み込む
-			if (space.landing_page_content) {
-				pageSettings = {
-					...pageSettings,
-					...space.landing_page_content
-				}
+
+			// 既存のコンテンツを読み込む
+			if (space.landing_page_content && space.landing_page_content.sections && space.landing_page_content.sections.length > 0) {
+				title = space.landing_page_content.title || space.title
+				description = space.landing_page_content.description || space.description
+				sections = space.landing_page_content.sections
+				themeColor = space.landing_page_content.theme?.primaryColor || '#2563eb'
 			} else {
-				// デフォルト設定
-				pageSettings.title = space.title
-				pageSettings.description = space.description
-				pageSettings.hero.title = space.title
-				pageSettings.hero.subtitle = space.description
-				pageSettings.hero.ctaUrl = `/${username}/space/${space.slug}`
+				// デフォルトセクションを作成(理想的なLP構成)
+				title = space.title
+				description = space.description
+				sections = [
+					{
+						id: '1',
+						type: 'header',
+						title: 'ヘッダー',
+						content: 'スペース名とナビゲーションを表示',
+						imageUrl: '',
+						buttonText: '',
+						buttonUrl: '',
+						backgroundColor: '#ffffff',
+						textColor: '#111827'
+					},
+					{
+						id: '2',
+						type: 'hero',
+						title: space.title,
+						content: space.description || '最高の学習体験をお届けします。プロフェッショナルな指導で、あなたのスキルを次のレベルへ。',
+						buttonText: '今すぐ無料で始める',
+						buttonUrl: `/${data.username}/space/${data.slug}/enroll`,
+						imageUrl: '',
+						backgroundColor: '#2563eb',
+						textColor: '#ffffff'
+					},
+					{
+						id: '3',
+						type: 'features',
+						title: 'このコースで得られること',
+						content: '• 実践的なスキル: すぐに使える知識とテクニック\n• プロフェッショナルな指導: 業界経験豊富な講師による丁寧なサポート\n• 柔軟な学習: 自分のペースで、いつでもどこでも学習可能\n• 実績あるカリキュラム: 多くの受講生が成果を実感',
+						imageUrl: '',
+						buttonText: '',
+						buttonUrl: '',
+						backgroundColor: '#ffffff',
+						textColor: '#111827'
+					},
+					{
+						id: '4',
+						type: 'courses',
+						title: '提供コース',
+						content: '初心者から上級者まで、レベルに合わせた質の高いコンテンツをご用意しています',
+						imageUrl: '',
+						buttonText: '',
+						buttonUrl: '',
+						backgroundColor: '#ffffff',
+						textColor: '#111827'
+					},
+					{
+						id: '5',
+						type: 'instructor',
+						title: '講師紹介',
+						content: '10年以上の実務経験を持つプロフェッショナル。これまで1000名以上の受講生を指導し、多くの成功事例を生み出してきました。実践的な知識と分かりやすい指導で、あなたの学習をサポートします。',
+						imageUrl: '',
+						buttonText: '',
+						buttonUrl: '',
+						backgroundColor: '#ffffff',
+						textColor: '#111827'
+					},
+					{
+						id: '6',
+						type: 'faq',
+						title: 'よくある質問',
+						content: 'Q: 初心者でも大丈夫ですか？\nA: はい、基礎から丁寧に解説しますので初心者の方でも安心して学習できます。\n\nQ: どのくらいの期間で習得できますか？\nA: 個人差はありますが、多くの方が3〜6ヶ月で基礎を習得されています。\n\nQ: サポートはありますか？\nA: はい、質問対応やフィードバックなど充実したサポート体制を整えています。',
+						imageUrl: '',
+						buttonText: '',
+						buttonUrl: '',
+						backgroundColor: '#ffffff',
+						textColor: '#111827'
+					},
+					{
+						id: '7',
+						type: 'cta',
+						title: '今すぐ学習を始めませんか？',
+						content: '無料登録で、すぐにコースをご覧いただけます。あなたの成長をサポートします。',
+						buttonText: '無料で始める',
+						buttonUrl: `/${data.username}/space/${data.slug}/enroll`,
+						imageUrl: '',
+						backgroundColor: '#ffffff',
+						textColor: '#111827'
+					},
+					{
+						id: '8',
+						type: 'footer',
+						title: 'フッター',
+						content: '© 2025 Your Company. All rights reserved.',
+						imageUrl: '',
+						buttonText: '',
+						buttonUrl: '',
+						backgroundColor: '#ffffff',
+						textColor: '#111827'
+					}
+				]
 			}
-			
+
+			// 講師プロフィール一覧を読み込む
+			const { data: profilesData, error: profilesError } = await supabase
+				.from('instructor_profiles')
+				.select('*')
+				.eq('user_id', data.user.id)
+				.eq('is_active', true)
+				.order('is_primary', { ascending: false })
+				.order('created_at', { ascending: false })
+
+			if (!profilesError) {
+				instructorProfiles = profilesData || []
+			}
+
 		} catch (err: any) {
 			error = err.message
-			console.error('Load space data error:', err)
+			console.error('Load error:', err)
 		} finally {
 			loading = false
 		}
 	}
-	
-	async function savePageSettings() {
+
+	async function savePage() {
 		if (!space) return
-		
+
 		saving = true
 		saveMessage = ''
 		error = ''
-		
+
 		try {
 			const { error: updateError } = await supabase
 				.from('spaces')
 				.update({
-					landing_page_content: pageSettings
+					landing_page_content: {
+						title,
+						description,
+						theme: {
+							primaryColor: themeColor,
+							accentColor: themeColor
+						},
+						sections
+					}
 				})
-				.eq('slug', slug)
-				.eq('instructor_id', username)
-			
+				.eq('id', space.id)
+
 			if (updateError) throw updateError
-			
+
 			saveMessage = '保存しました'
 			setTimeout(() => {
 				saveMessage = ''
 			}, 3000)
-			
+
 		} catch (err: any) {
 			error = err.message
-			console.error('Save page settings error:', err)
+			console.error('Save error:', err)
 		} finally {
 			saving = false
 		}
 	}
-	
-	function addSection() {
-		const newSection = {
+
+	function addSection(template: any) {
+		const newSection: Section = {
 			id: Date.now().toString(),
-			type: 'text',
-			title: '新しいセクション',
-			content: 'ここにコンテンツを入力してください。',
-			settings: {
-				backgroundColor: '#FFFFFF',
-				padding: 'normal'
-			}
+			...template
 		}
-		pageSettings.sections = [...pageSettings.sections, newSection]
-		editSection(pageSettings.sections.length - 1)
+		sections = [...sections, newSection]
 	}
-	
-	function editSection(index) {
-		editingSection = { ...pageSettings.sections[index], index }
-		showSectionModal = true
-	}
-	
-	function saveSectionEdit() {
-		if (editingSection) {
-			const { index, ...sectionData } = editingSection
-			pageSettings.sections[index] = sectionData
-			pageSettings = { ...pageSettings }
-		}
-		closeSectionModal()
-	}
-	
-	function closeSectionModal() {
-		editingSection = null
-		showSectionModal = false
-	}
-	
-	function removeSection(index: number) {
-		pageSettings.sections = pageSettings.sections.filter((_, i) => i !== index)
-	}
-	
+
 	function moveSection(index: number, direction: 'up' | 'down') {
-		const newSections = [...pageSettings.sections]
+		const newSections = [...sections]
 		const targetIndex = direction === 'up' ? index - 1 : index + 1
-		
+
 		if (targetIndex >= 0 && targetIndex < newSections.length) {
 			[newSections[index], newSections[targetIndex]] = [newSections[targetIndex], newSections[index]]
-			pageSettings.sections = newSections
+			sections = newSections
 		}
 	}
-	
+
+	function openDeleteModal(index: number) {
+		deleteTargetIndex = index
+		showDeleteModal = true
+	}
+
+	function confirmDelete() {
+		if (deleteTargetIndex !== null) {
+			sections = sections.filter((_, i) => i !== deleteTargetIndex)
+			deleteTargetIndex = null
+		}
+		showDeleteModal = false
+	}
+
+	function cancelDelete() {
+		deleteTargetIndex = null
+		showDeleteModal = false
+	}
+
 	function previewPage() {
-		window.open(`/${username}/space/${space.slug}`, '_blank')
+		window.open(`/${data.username}/space/${data.slug}`, '_blank')
+	}
+
+	function getSectionIcon(type: string): string {
+		const template = templates.find(t => t.template.type === type)
+		return template?.icon || '📄'
+	}
+
+	function resetToIdealLayout() {
+		if (!confirm('現在のセクションをすべて削除して、理想的なLP構成にリセットしますか？')) {
+			return
+		}
+
+		sections = [
+			{
+				id: Date.now().toString() + '-1',
+				type: 'header',
+				title: 'ヘッダー',
+				content: 'スペース名とナビゲーションを表示',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			},
+			{
+				id: Date.now().toString() + '-2',
+				type: 'hero',
+				title: title || space.title,
+				content: description || space.description || '最高の学習体験をお届けします。プロフェッショナルな指導で、あなたのスキルを次のレベルへ。',
+				buttonText: '今すぐ無料で始める',
+				buttonUrl: `/${data.username}/space/${data.slug}/enroll`,
+				imageUrl: '',
+				backgroundColor: '#2563eb',
+				textColor: '#ffffff'
+			},
+			{
+				id: Date.now().toString() + '-3',
+				type: 'features',
+				title: 'このコースで得られること',
+				content: '• 実践的なスキル: すぐに使える知識とテクニック\n• プロフェッショナルな指導: 業界経験豊富な講師による丁寧なサポート\n• 柔軟な学習: 自分のペースで、いつでもどこでも学習可能\n• 実績あるカリキュラム: 多くの受講生が成果を実感',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			},
+			{
+				id: Date.now().toString() + '-4',
+				type: 'courses',
+				title: '提供コース',
+				content: '初心者から上級者まで、レベルに合わせた質の高いコンテンツをご用意しています',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			},
+			{
+				id: Date.now().toString() + '-5',
+				type: 'instructor',
+				title: '講師紹介',
+				content: '10年以上の実務経験を持つプロフェッショナル。これまで1000名以上の受講生を指導し、多くの成功事例を生み出してきました。実践的な知識と分かりやすい指導で、あなたの学習をサポートします。',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			},
+			{
+				id: Date.now().toString() + '-6',
+				type: 'faq',
+				title: 'よくある質問',
+				content: 'Q: 初心者でも大丈夫ですか？\nA: はい、基礎から丁寧に解説しますので初心者の方でも安心して学習できます。\n\nQ: どのくらいの期間で習得できますか？\nA: 個人差はありますが、多くの方が3〜6ヶ月で基礎を習得されています。\n\nQ: サポートはありますか？\nA: はい、質問対応やフィードバックなど充実したサポート体制を整えています。',
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			},
+			{
+				id: Date.now().toString() + '-7',
+				type: 'cta',
+				title: '今すぐ学習を始めませんか？',
+				content: '無料登録で、すぐにコースをご覧いただけます。あなたの成長をサポートします。',
+				buttonText: '無料で始める',
+				buttonUrl: `/${data.username}/space/${data.slug}/enroll`,
+				imageUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			},
+			{
+				id: Date.now().toString() + '-8',
+				type: 'footer',
+				title: 'フッター',
+				content: `© ${new Date().getFullYear()} ${space.title}. All rights reserved.`,
+				imageUrl: '',
+				buttonText: '',
+				buttonUrl: '',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		]
 	}
 </script>
 
-<div class="min-h-screen bg-gray-50">
-	<div class="max-w-6xl mx-auto">
-		<!-- ヘッダー -->
-		<div class="bg-white border-b px-6 py-4">
-			<div class="flex items-center justify-between">
-				<div>
-					<h1 class="text-2xl font-bold text-gray-900">ページエディター</h1>
-					<nav class="text-sm text-gray-600 mt-1">
-						<a href="/{username}/dashboard" class="hover:text-blue-600">ダッシュボード</a>
-						<span class="mx-2">/</span>
-						<a href="/{username}/spaces" class="hover:text-blue-600">スペース</a>
-						<span class="mx-2">/</span>
-						<span>{space?.title || 'Loading...'}</span>
-						<span class="mx-2">/</span>
-						<span>エディター</span>
-					</nav>
-				</div>
-				<div class="flex items-center space-x-3">
-					{#if space}
-						<button
-							on:click={previewPage}
-							class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-						>
-							プレビュー
-						</button>
-					{/if}
+<!-- ヘッダー -->
+<div class="bg-white border-b border-gray-200 sticky top-0 z-10">
+	<div class="px-6 py-4">
+		<div class="flex items-center justify-between">
+			<div>
+				<h1 class="text-xl font-bold text-gray-900">ページエディター</h1>
+				<p class="text-sm text-gray-600 mt-1">
+					<a href="/{data.username}/spaces" class="hover:text-blue-600">スペース一覧</a>
+					<span class="mx-2">/</span>
+					<span>{space?.title || 'Loading...'}</span>
+				</p>
+			</div>
+			<div class="flex items-center space-x-3">
+				<!-- 理想的なLP構成にリセット -->
+				<button
+					on:click={resetToIdealLayout}
+					class="px-3 py-2 text-purple-700 bg-purple-50 hover:bg-purple-100 rounded-lg transition-colors text-sm font-medium"
+					title="理想的なLP構成にリセット"
+				>
+					✨ 理想構成
+				</button>
+				<!-- テーマカラー選択ボタン -->
+				<button
+					on:click={() => showThemeModal = true}
+					class="flex items-center space-x-2 px-3 py-2 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+				>
+					<span class="text-sm text-gray-600">テーマカラー:</span>
+					<div class="w-6 h-6 rounded border-2 border-white shadow-sm" style="background-color: {themeColor}"></div>
+				</button>
+				{#if space}
 					<button
-						on:click={savePageSettings}
-						disabled={saving || !space}
-						class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors"
+						on:click={previewPage}
+						class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-sm"
 					>
-						{saving ? '保存中...' : '保存'}
+						プレビュー
 					</button>
-				</div>
+				{/if}
+				<button
+					on:click={savePage}
+					disabled={saving || !space}
+					class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm"
+				>
+					{saving ? '保存中...' : '保存'}
+				</button>
 			</div>
 		</div>
-		
-		{#if loading}
-			<div class="flex justify-center items-center h-64">
-				<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+
+		{#if saveMessage}
+			<div class="mt-3 bg-green-50 border border-green-200 text-green-600 px-4 py-2 rounded text-sm">
+				{saveMessage}
 			</div>
-		{:else if error}
-			<div class="p-6">
-				<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-					{error}
-				</div>
-			</div>
-		{:else if space}
-			<!-- メイン編集エリア -->
-			<div class="flex">
-				<!-- 設定パネル -->
-				<div class="w-80 bg-white border-r h-screen overflow-y-auto">
-					<div class="p-6">
-						{#if saveMessage}
-							<div class="mb-4 bg-green-50 border border-green-200 text-green-600 px-3 py-2 rounded text-sm">
-								{saveMessage}
-							</div>
-						{/if}
-						
-						<!-- 基本設定 -->
-						<div class="mb-8">
-							<h3 class="text-lg font-medium text-gray-900 mb-4">基本設定</h3>
-							<div class="space-y-4">
-								<div>
-									<label for="page-title" class="block text-sm font-medium text-gray-700 mb-2">
-										ページタイトル
-									</label>
-									<input
-										id="page-title"
-										type="text"
-										bind:value={pageSettings.title}
-										class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-									/>
-								</div>
-								<div>
-									<label for="page-description" class="block text-sm font-medium text-gray-700 mb-2">
-										ページ説明
-									</label>
-									<textarea
-										id="page-description"
-										bind:value={pageSettings.description}
-										rows="3"
-										class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-									></textarea>
-								</div>
-							</div>
-						</div>
-						
-						<!-- テーマ設定 -->
-						<div class="mb-8">
-							<h3 class="text-lg font-medium text-gray-900 mb-4">テーマ設定</h3>
-							<div class="space-y-4">
-								<div>
-									<label for="primary-color" class="block text-sm font-medium text-gray-700 mb-2">
-										プライマリカラー
-									</label>
-									<input
-										id="primary-color"
-										type="color"
-										bind:value={pageSettings.theme.primaryColor}
-										class="w-full h-10 border border-gray-300 rounded-lg"
-									/>
-								</div>
-								<div>
-									<label for="accent-color" class="block text-sm font-medium text-gray-700 mb-2">
-										アクセントカラー
-									</label>
-									<input
-										id="accent-color"
-										type="color"
-										bind:value={pageSettings.theme.accentColor}
-										class="w-full h-10 border border-gray-300 rounded-lg"
-									/>
-								</div>
-							</div>
-						</div>
-						
-						<!-- ヒーロー設定 -->
-						<div class="mb-8">
-							<h3 class="text-lg font-medium text-gray-900 mb-4">ヒーローセクション</h3>
-							<div class="space-y-4">
-								<div class="flex items-center">
-									<input
-										id="hero-enabled"
-										type="checkbox"
-										bind:checked={pageSettings.hero.enabled}
-										class="h-4 w-4 text-blue-600 border-gray-300 rounded focus:ring-blue-500"
-									/>
-									<label for="hero-enabled" class="ml-2 text-sm text-gray-700">
-										ヒーローセクションを表示
-									</label>
-								</div>
-								{#if pageSettings.hero.enabled}
-									<div>
-										<label for="hero-title" class="block text-sm font-medium text-gray-700 mb-2">
-											タイトル
-										</label>
-										<input
-											id="hero-title"
-											type="text"
-											bind:value={pageSettings.hero.title}
-											class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-										/>
-									</div>
-									<div>
-										<label for="hero-subtitle" class="block text-sm font-medium text-gray-700 mb-2">
-											サブタイトル
-										</label>
-										<textarea
-											id="hero-subtitle"
-											bind:value={pageSettings.hero.subtitle}
-											rows="3"
-											class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-										></textarea>
-									</div>
-									<div>
-										<label for="hero-cta-text" class="block text-sm font-medium text-gray-700 mb-2">
-											CTAボタンテキスト
-										</label>
-										<input
-											id="hero-cta-text"
-											type="text"
-											bind:value={pageSettings.hero.ctaText}
-											class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-										/>
-									</div>
-								{/if}
-							</div>
-						</div>
-					</div>
-				</div>
-				
-				<!-- プレビューエリア -->
-				<div class="flex-1 p-6">
-					<div class="mb-4">
-						<h3 class="text-lg font-medium text-gray-900 mb-2">プレビュー</h3>
-						<p class="text-sm text-gray-600">実際のページの見た目をプレビューできます</p>
-					</div>
-					
-					<div class="bg-white border rounded-lg overflow-hidden shadow-sm" style="min-height: 600px;">
-						<!-- ヒーローセクションプレビュー -->
-						{#if pageSettings.hero.enabled}
-							<div 
-								class="py-16 px-8 text-white text-center"
-								style="background: linear-gradient(135deg, {pageSettings.theme.primaryColor}, color-mix(in srgb, {pageSettings.theme.primaryColor} 80%, transparent))"
-							>
-								<h1 class="text-4xl font-bold mb-4">{pageSettings.hero.title}</h1>
-								<p class="text-xl text-white/90 mb-8 max-w-2xl mx-auto">{pageSettings.hero.subtitle}</p>
-								<a
-									href={pageSettings.hero.ctaUrl}
-									class="inline-block px-6 py-3 bg-white text-gray-900 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
-									style="color: {pageSettings.theme.primaryColor}"
-								>
-									{pageSettings.hero.ctaText}
-								</a>
-							</div>
-						{/if}
-						
-						<!-- セクション一覧 -->
-						<div class="divide-y divide-gray-200">
-							{#each pageSettings.sections as section, index}
-								<div class="relative group">
-									<div 
-										class="p-8"
-										style="background-color: {section.settings.backgroundColor}"
-									>
-										<h3 class="text-2xl font-bold mb-4" style="color: {pageSettings.theme.textColor}">
-											{section.title}
-										</h3>
-										<div class="prose" style="color: {pageSettings.theme.textColor}">
-											{@html section.content.replace(/\n/g, '<br>')}
-										</div>
-									</div>
-									
-									<!-- セクション編集ツール -->
-									<div class="absolute top-2 right-2 opacity-0 group-hover:opacity-100 transition-opacity">
-										<div class="flex items-center space-x-1 bg-white border rounded-lg shadow-sm p-1">
-											<button
-												on:click={() => editSection(index)}
-												class="p-1 text-blue-600 hover:text-blue-900"
-												title="編集"
-											>
-												<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
-												</svg>
-											</button>
-											<button
-												on:click={() => moveSection(index, 'up')}
-												disabled={index === 0}
-												class="p-1 text-gray-600 hover:text-gray-900 disabled:opacity-50"
-												title="上に移動"
-											>
-												<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
-												</svg>
-											</button>
-											<button
-												on:click={() => moveSection(index, 'down')}
-												disabled={index === pageSettings.sections.length - 1}
-												class="p-1 text-gray-600 hover:text-gray-900 disabled:opacity-50"
-												title="下に移動"
-											>
-												<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
-												</svg>
-											</button>
-											<button
-												on:click={() => removeSection(index)}
-												class="p-1 text-red-600 hover:text-red-900"
-												title="削除"
-											>
-												<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
-												</svg>
-											</button>
-										</div>
-									</div>
-								</div>
-							{/each}
-						</div>
-						
-						<!-- セクション追加ボタン -->
-						<div class="p-8 border-t border-dashed border-gray-300">
-							<button
-								on:click={addSection}
-								class="w-full py-4 border border-gray-300 border-dashed rounded-lg text-gray-600 hover:border-blue-500 hover:text-blue-600 transition-colors"
-							>
-								<svg class="h-6 w-6 mx-auto mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"/>
-								</svg>
-								セクションを追加
-							</button>
-						</div>
-					</div>
-				</div>
+		{/if}
+
+		{#if error}
+			<div class="mt-3 bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded text-sm">
+				{error}
 			</div>
 		{/if}
 	</div>
 </div>
 
-<!-- セクション編集モーダル -->
-{#if showSectionModal && editingSection}
-	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50" on:click={closeSectionModal}>
-		<div class="bg-white rounded-lg max-w-2xl w-full mx-4 max-h-[80vh] overflow-y-auto" on:click|stopPropagation>
-			<div class="px-6 py-4 border-b">
-				<h3 class="text-lg font-medium text-gray-900">セクション編集</h3>
+{#if loading}
+	<div class="flex justify-center items-center h-64">
+		<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+	</div>
+{:else if space}
+	<div class="flex h-[calc(100vh-120px)]">
+		<!-- 左: セクション一覧 + テンプレートパレット -->
+		<div class="w-1/2 bg-white border-r border-gray-200 overflow-y-auto">
+			<div class="p-4">
+				<!-- セクション一覧 -->
+				<div class="mb-6">
+					<h2 class="text-sm font-semibold text-gray-900 mb-3">セクション一覧</h2>
+					{#if sections.length === 0}
+						<div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+							<p class="text-xs text-gray-500">
+								下のテンプレートから<br>セクションを追加してください
+							</p>
+						</div>
+					{:else}
+						<div class="space-y-2">
+							{#each sections as section, index}
+								<div
+									class="border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
+									class:opacity-50={draggedIndex === index}
+									class:border-blue-500={draggedIndex !== null && draggedIndex !== index}
+									draggable="true"
+									on:dragstart={(e) => handleDragStart(e, index)}
+									on:dragover={handleDragOver}
+									on:drop={(e) => handleDrop(e, index)}
+									on:dragend={handleDragEnd}
+								>
+									<!-- ヘッダー部分（常に表示・クリックで開閉） -->
+									<div class="p-3 flex items-center justify-between">
+										<button
+											type="button"
+											on:click={() => toggleSection(section.id)}
+											class="flex items-center space-x-2 flex-1 text-left hover:bg-gray-50 transition-colors -m-3 p-3 rounded-l-lg"
+										>
+											<span class="text-base">{getSectionIcon(section.type)}</span>
+											<span class="text-xs font-medium text-gray-900">{section.title}</span>
+											<!-- 開閉アイコン -->
+											<svg class="w-4 h-4 text-gray-400 transition-transform ml-auto" class:rotate-180={expandedSections.has(section.id)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+											</svg>
+										</button>
+										<div class="flex items-center space-x-1">
+											<div class="p-1 text-gray-400 cursor-move" title="ドラッグして移動">
+												<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
+												</svg>
+											</div>
+											<button
+												type="button"
+												on:click|stopPropagation={() => moveSection(index, 'up')}
+												disabled={index === 0}
+												class="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+												title="上に移動"
+											>
+												<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 15l7-7 7 7"/>
+												</svg>
+											</button>
+											<button
+												type="button"
+												on:click|stopPropagation={() => moveSection(index, 'down')}
+												disabled={index === sections.length - 1}
+												class="p-1 text-gray-400 hover:text-gray-600 disabled:opacity-30"
+												title="下に移動"
+											>
+												<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
+												</svg>
+											</button>
+											<button
+												type="button"
+												on:click|stopPropagation={() => openDeleteModal(index)}
+												class="p-1 text-red-400 hover:text-red-600"
+												title="削除"
+											>
+												<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+												</svg>
+											</button>
+										</div>
+									</div>
+
+									<!-- 詳細編集部分（開閉） -->
+									{#if expandedSections.has(section.id)}
+										<div class="p-3 pt-0 border-t border-gray-100">
+											<input
+												type="text"
+												bind:value={section.title}
+												class="w-full text-xs border border-gray-300 rounded px-2 py-1 mb-2"
+												placeholder="タイトル"
+											/>
+											{#if section.type === 'instructor'}
+												<!-- 講師プロフィール選択 -->
+												<select
+													bind:value={section.instructorProfileId}
+													class="w-full text-xs border border-gray-300 rounded px-2 py-1 mb-2"
+												>
+													<option value="">講師プロフィールを選択...</option>
+													{#each instructorProfiles as profile}
+														<option value={profile.id}>{profile.display_name} (@{profile.username})</option>
+													{/each}
+												</select>
+											{/if}
+											{#if section.type !== 'features' && section.type !== 'instructor'}
+												<textarea
+													bind:value={section.content}
+													rows="2"
+													class="w-full text-xs border border-gray-300 rounded px-2 py-1"
+													placeholder="コンテンツ"
+												></textarea>
+											{:else if section.type === 'instructor'}
+												<textarea
+													bind:value={section.content}
+													rows="2"
+													class="w-full text-xs border border-gray-300 rounded px-2 py-1"
+													placeholder="追加の説明文（任意）"
+												></textarea>
+											{/if}
+											{#if section.type === 'image-text' || section.type === 'hero'}
+												<input
+													type="text"
+													bind:value={section.imageUrl}
+													class="w-full text-xs border border-gray-300 rounded px-2 py-1 mt-2"
+													placeholder="画像URL"
+												/>
+											{/if}
+											{#if section.type === 'hero' || section.type === 'cta'}
+												<div class="grid grid-cols-2 gap-2 mt-2">
+													<input
+														type="text"
+														bind:value={section.buttonText}
+														class="text-xs border border-gray-300 rounded px-2 py-1"
+														placeholder="ボタン"
+													/>
+													<input
+														type="text"
+														bind:value={section.buttonUrl}
+														class="text-xs border border-gray-300 rounded px-2 py-1"
+														placeholder="URL"
+													/>
+												</div>
+											{/if}
+											{#if section.type === 'features'}
+												<div class="mt-2 pt-2 border-t border-gray-200">
+													<p class="text-xs text-gray-600 mb-2">特徴項目（アイコン・タイトル・説明）</p>
+													{#if !section.features}
+														{@const parsedFeatures = section.content.split('\n').filter(line => line.trim().startsWith('•')).map((line, idx) => {
+															const text = line.replace('•', '').trim()
+															const [title, ...descParts] = text.split(':')
+															return {
+																icon: idx === 0 ? '⚙️' : idx === 1 ? '👥' : idx === 2 ? '⏰' : '✓',
+																title: title.trim(),
+																description: descParts.join(':').trim()
+															}
+														})}
+														{@const _ = (section.features = parsedFeatures, null)}
+													{/if}
+													{#each section.features || [] as feature, featureIdx}
+														<div class="bg-gray-50 rounded px-2 py-2 mb-2 relative">
+															<button
+																on:click={() => deleteFeature(index, featureIdx)}
+																class="absolute top-1 right-1 p-1 text-red-400 hover:text-red-600 hover:bg-red-50 rounded"
+																title="削除"
+															>
+																<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																	<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+																</svg>
+															</button>
+															<div class="grid grid-cols-12 gap-1 mb-1">
+																<button
+																	type="button"
+																	on:click={() => openEmojiPicker(index, featureIdx)}
+																	class="col-span-2 text-base border border-gray-300 rounded px-1 py-1 text-center hover:bg-gray-100 cursor-pointer"
+																	title="アイコンを選択"
+																>
+																	{feature.icon}
+																</button>
+																<input
+																	type="text"
+																	bind:value={feature.title}
+																	class="col-span-10 text-xs border border-gray-300 rounded px-2 py-1"
+																	placeholder="タイトル"
+																/>
+															</div>
+															<input
+																type="text"
+																bind:value={feature.description}
+																class="w-full text-xs border border-gray-300 rounded px-2 py-1"
+																placeholder="説明"
+															/>
+														</div>
+													{/each}
+													<button
+														on:click={() => {
+															if (!section.features) section.features = []
+															section.features = [...section.features, { icon: '✨', title: '新しい特徴', description: '説明を入力' }]
+														}}
+														class="w-full text-xs text-blue-600 hover:text-blue-700 py-1"
+													>
+														+ 項目を追加
+													</button>
+												</div>
+											{/if}
+										</div>
+									{/if}
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+
+				<!-- テンプレートパレット -->
+				<div class="border-t pt-4">
+					<h2 class="text-sm font-semibold text-gray-900 mb-3">テンプレート</h2>
+					<div class="space-y-2">
+						{#each templates as template}
+							<button
+								on:click={() => addSection(template.template)}
+								class="w-full text-left p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors group"
+							>
+								<div class="flex items-start">
+									<span class="text-xl mr-2">{template.icon}</span>
+									<div class="flex-1 min-w-0">
+										<div class="font-medium text-gray-900 text-xs group-hover:text-blue-600">
+											{template.name}
+										</div>
+										<div class="text-xs text-gray-500 mt-1">
+											{template.description}
+										</div>
+									</div>
+								</div>
+							</button>
+						{/each}
+					</div>
+				</div>
 			</div>
-			
-			<div class="px-6 py-4 space-y-4">
-				<div>
-					<label for="section-title" class="block text-sm font-medium text-gray-700 mb-2">
-						セクションタイトル
-					</label>
-					<input
-						id="section-title"
-						type="text"
-						bind:value={editingSection.title}
-						class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-					/>
-				</div>
-				
-				<div>
-					<label for="section-content" class="block text-sm font-medium text-gray-700 mb-2">
-						コンテンツ
-					</label>
-					<textarea
-						id="section-content"
-						bind:value={editingSection.content}
-						rows="8"
-						class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-blue-500 focus:border-blue-500"
-						placeholder="セクションの内容を入力してください..."
-					></textarea>
-				</div>
-				
-				<div>
-					<label for="section-bg-color" class="block text-sm font-medium text-gray-700 mb-2">
-						背景色
-					</label>
-					<input
-						id="section-bg-color"
-						type="color"
-						bind:value={editingSection.settings.backgroundColor}
-						class="w-full h-10 border border-gray-300 rounded-lg"
-					/>
+		</div>
+
+		<!-- 右: プレビュー -->
+		<div class="w-1/2 bg-gray-50 overflow-y-auto">
+			<div class="p-6">
+				<div class="bg-white rounded-lg shadow-lg overflow-hidden max-w-5xl mx-auto">
+					<!-- プレビューヘッダー -->
+					<div class="bg-gray-50 border-b border-gray-200 px-4 py-3">
+						<h2 class="text-sm font-semibold text-gray-900">プレビュー</h2>
+					</div>
+
+					<!-- プレビューコンテンツ -->
+					<div class="min-h-screen bg-white">
+						{#each sections as section}
+							<div class="border-b border-gray-100 last:border-b-0">
+								{#if section.type === 'header'}
+									<!-- ヘッダー -->
+									<nav class="shadow-sm border-b" style="background-color: {section.backgroundColor || '#ffffff'}; color: {section.textColor || '#111827'}">
+										<div class="px-6 py-4">
+											<div class="flex justify-between items-center">
+												<div class="flex items-center space-x-2">
+													<div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background-color: {themeColor}">
+														<span class="text-white font-bold text-sm">{space.title.charAt(0)}</span>
+													</div>
+													<span class="font-medium" style="color: {section.textColor || '#111827'}">{space.title}</span>
+												</div>
+												<div class="flex items-center space-x-4">
+													<button class="font-medium text-sm" style="color: {section.textColor || '#111827'}">
+														ログイン
+													</button>
+													<button class="text-white px-4 py-2 rounded-lg font-medium text-sm" style="background-color: {themeColor}">
+														生徒登録
+													</button>
+												</div>
+											</div>
+										</div>
+									</nav>
+								{:else if section.type === 'hero'}
+									<!-- ヒーロー -->
+									<section class="py-16 text-white" style="background-color: {themeColor}">
+										<div class="px-6 text-center">
+											<h1 class="text-4xl font-bold mb-4">{section.title}</h1>
+											<p class="text-xl mb-6 opacity-90">{section.content}</p>
+											{#if section.buttonText}
+												<button class="bg-white text-gray-900 px-6 py-3 rounded-lg font-semibold">
+													{section.buttonText}
+												</button>
+											{/if}
+										</div>
+									</section>
+								{:else if section.type === 'courses'}
+									<!-- コース一覧 -->
+									<section class="py-12 bg-white text-gray-900">
+										<div class="px-6">
+											<div class="text-center mb-8">
+												<h2 class="text-3xl font-bold mb-2">{section.title}</h2>
+												<p class="text-lg opacity-80">{section.content}</p>
+											</div>
+											<div class="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
+												<div class="bg-white rounded-lg shadow p-4">
+													<h3 class="text-lg font-semibold text-gray-900 mb-2">コース例</h3>
+													<p class="text-sm text-gray-600 mb-3">コースの説明文が入ります</p>
+													<div class="text-sm text-gray-500 mb-3">8 レッスン</div>
+													<button class="w-full text-white py-2 rounded-lg text-sm font-medium" style="background-color: {themeColor}">
+														詳細を見る
+													</button>
+												</div>
+											</div>
+										</div>
+									</section>
+								{:else if section.type === 'instructor'}
+									<!-- 講師紹介 -->
+									{@const selectedProfile = instructorProfiles.find(p => p.id === section.instructorProfileId)}
+									<section class="py-12 bg-white text-gray-900">
+										<div class="px-6">
+											<div class="max-w-4xl mx-auto text-center">
+												<h2 class="text-3xl font-bold mb-6">{section.title}</h2>
+												<div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6">
+													{#if selectedProfile}
+														{#if selectedProfile.avatar_url}
+															<img src={selectedProfile.avatar_url} alt={selectedProfile.display_name} class="h-24 w-24 rounded-full object-cover" />
+														{:else}
+															<div class="h-24 w-24 rounded-full bg-gray-300 flex items-center justify-center">
+																<svg class="h-12 w-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																	<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z"/>
+																</svg>
+															</div>
+														{/if}
+														<div class="flex-1 text-left">
+															<h3 class="text-xl font-semibold mb-2">{selectedProfile.display_name}</h3>
+															<p class="opacity-80">{selectedProfile.bio || section.content}</p>
+															{#if section.content && selectedProfile.bio}
+																<p class="mt-2 opacity-80">{section.content}</p>
+															{/if}
+														</div>
+													{:else}
+														<div class="h-24 w-24 rounded-full bg-gray-300"></div>
+														<div class="flex-1 text-left">
+															<h3 class="text-xl font-semibold mb-2">講師名</h3>
+															<p class="opacity-80 text-gray-500 italic">講師プロフィールを選択してください</p>
+														</div>
+													{/if}
+												</div>
+											</div>
+										</div>
+									</section>
+								{:else if section.type === 'cta'}
+									<!-- CTA -->
+									<section class="py-12 bg-white text-gray-900">
+										<div class="px-6 text-center">
+											<h2 class="text-3xl font-bold mb-3">{section.title}</h2>
+											<p class="text-lg mb-6 opacity-90">{section.content}</p>
+											{#if section.buttonText}
+												<button class="px-6 py-3 rounded-lg font-semibold text-white" style="background-color: {themeColor}">
+													{section.buttonText}
+												</button>
+											{/if}
+										</div>
+									</section>
+								{:else if section.type === 'features'}
+									<!-- 特徴リスト -->
+									<section class="py-12 bg-white text-gray-900">
+										<div class="px-6">
+											<h2 class="text-3xl font-bold text-center mb-8">{section.title}</h2>
+											<div class="grid grid-cols-1 md:grid-cols-2 gap-6 max-w-5xl mx-auto">
+												{#each (section.features || section.content.split('\n').filter(line => line.trim().startsWith('•')).map((line, idx) => {
+													const text = line.replace('•', '').trim()
+													const [title, ...descParts] = text.split(':')
+													return {
+														icon: idx === 0 ? '⚙️' : idx === 1 ? '👥' : idx === 2 ? '⏰' : '✓',
+														title: title.trim(),
+														description: descParts.join(':').trim()
+													}
+												})) as feature}
+													<div class="flex items-start space-x-4 bg-white rounded-xl p-6 shadow-sm hover:shadow-md transition-shadow border border-gray-100">
+														<div class="flex-shrink-0 w-14 h-14 rounded-lg flex items-center justify-center text-2xl" style="background-color: {themeColor}20">
+															<span>{feature.icon}</span>
+														</div>
+														<div class="flex-1 min-w-0">
+															<h3 class="text-lg font-bold text-gray-900 mb-2">{feature.title}</h3>
+															<p class="text-sm text-gray-600">{feature.description}</p>
+														</div>
+													</div>
+												{/each}
+											</div>
+										</div>
+									</section>
+								{:else if section.type === 'image-text'}
+									<!-- 画像+テキスト -->
+									<section class="py-12 bg-white text-gray-900">
+										<div class="px-6">
+											<h3 class="text-2xl font-bold mb-4">{section.title}</h3>
+											{#if section.imageUrl}
+												<img src={section.imageUrl} alt={section.title} class="w-full h-48 object-cover rounded-lg mb-4" />
+											{/if}
+											<p class="whitespace-pre-line opacity-80">{section.content}</p>
+										</div>
+									</section>
+								{:else if section.type === 'faq'}
+									<!-- FAQ -->
+									<section class="py-12 bg-white text-gray-900">
+										<div class="px-6">
+											<h3 class="text-2xl font-bold mb-6">{section.title}</h3>
+											<div class="space-y-3 max-w-2xl mx-auto">
+												{#each section.content.split('\n\n') as qa}
+													<div class="p-4 rounded-lg bg-gray-50">
+														<p class="text-sm whitespace-pre-line">{qa}</p>
+													</div>
+												{/each}
+											</div>
+										</div>
+									</section>
+								{:else if section.type === 'footer'}
+									<!-- フッター -->
+									<footer class="py-8 bg-white text-gray-900">
+										<div class="px-6">
+											<div class="max-w-7xl mx-auto">
+												<div class="text-center">
+													<p class="text-sm opacity-80">{section.content}</p>
+												</div>
+											</div>
+										</div>
+									</footer>
+								{:else}
+									<!-- デフォルト(テキスト) -->
+									<section class="py-12 bg-white text-gray-900">
+										<div class="px-6">
+											<h3 class="text-2xl font-bold mb-4">{section.title}</h3>
+											<p class="whitespace-pre-line opacity-80">{section.content}</p>
+										</div>
+									</section>
+								{/if}
+							</div>
+						{/each}
+
+						{#if sections.length === 0}
+							<div class="flex items-center justify-center h-64">
+								<p class="text-gray-400 text-center">
+									セクションを追加すると<br>ここにプレビューが表示されます
+								</p>
+							</div>
+						{/if}
+					</div>
 				</div>
 			</div>
-			
-			<div class="px-6 py-4 border-t flex justify-end space-x-3">
-				<button
-					on:click={closeSectionModal}
-					class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
-				>
-					キャンセル
-				</button>
-				<button
-					on:click={saveSectionEdit}
-					class="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
-				>
-					保存
-				</button>
+		</div>
+	</div>
+{/if}
+
+<!-- 削除確認モーダル -->
+{#if showDeleteModal}
+	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+		<div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+			<div class="p-6">
+				<div class="flex items-center mb-4">
+					<div class="flex-shrink-0 w-10 h-10 rounded-full bg-red-100 flex items-center justify-center">
+						<svg class="w-6 h-6 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+						</svg>
+					</div>
+					<div class="ml-4 flex-1">
+						<h3 class="text-lg font-semibold text-gray-900">セクションを削除</h3>
+					</div>
+				</div>
+				<p class="text-gray-600 mb-6">
+					このセクションを削除してもよろしいですか？<br>
+					<span class="text-sm text-gray-500">この操作は取り消せません。</span>
+				</p>
+				<div class="flex justify-end space-x-3">
+					<button
+						on:click={cancelDelete}
+						class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors"
+					>
+						キャンセル
+					</button>
+					<button
+						on:click={confirmDelete}
+						class="px-4 py-2 bg-red-600 text-white hover:bg-red-700 rounded-lg transition-colors"
+					>
+						削除する
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- テーマカラー選択モーダル -->
+{#if showThemeModal}
+	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+		<div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+			<div class="p-6">
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-gray-900">テーマカラーを選択</h3>
+					<button
+						on:click={() => showThemeModal = false}
+						class="text-gray-400 hover:text-gray-600"
+					>
+						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+						</svg>
+					</button>
+				</div>
+
+				<p class="text-sm text-gray-600 mb-4">
+					スペース全体のアクセントカラーを設定します
+				</p>
+
+				<!-- カラープリセット -->
+				<div class="grid grid-cols-5 gap-2 mb-4">
+					{#each colorPresets as preset}
+						<button
+							type="button"
+							on:click={() => themeColor = preset.color}
+							class="relative h-12 rounded-lg border-2 transition-all hover:scale-105"
+							class:border-gray-900={themeColor === preset.color}
+							class:border-gray-300={themeColor !== preset.color}
+							style="background-color: {preset.color}"
+							title={preset.name}
+						>
+							{#if themeColor === preset.color}
+								<div class="absolute inset-0 flex items-center justify-center">
+									<svg class="w-6 h-6 text-white drop-shadow" fill="currentColor" viewBox="0 0 20 20">
+										<path fill-rule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clip-rule="evenodd"/>
+									</svg>
+								</div>
+							{/if}
+						</button>
+					{/each}
+				</div>
+
+				<!-- カスタムカラー -->
+				<div class="mb-6">
+					<label class="block text-sm font-medium text-gray-700 mb-2">カスタムカラー</label>
+					<div class="flex items-center space-x-2">
+						<input
+							type="color"
+							bind:value={themeColor}
+							class="h-12 w-24 rounded border border-gray-300 cursor-pointer"
+						/>
+						<span class="text-sm text-gray-600">{themeColor}</span>
+					</div>
+				</div>
+
+				<div class="flex justify-end">
+					<button
+						on:click={() => showThemeModal = false}
+						class="px-4 py-2 bg-blue-600 text-white hover:bg-blue-700 rounded-lg transition-colors"
+					>
+						完了
+					</button>
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- 絵文字ピッカーモーダル -->
+{#if showEmojiPicker}
+	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+		<div class="bg-white rounded-lg shadow-xl max-w-md w-full mx-4">
+			<div class="p-6">
+				<div class="flex items-center justify-between mb-4">
+					<h3 class="text-lg font-semibold text-gray-900">アイコンを選択</h3>
+					<button
+						on:click={() => {
+							showEmojiPicker = false
+							emojiPickerTarget = null
+						}}
+						class="text-gray-400 hover:text-gray-600"
+					>
+						<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+						</svg>
+					</button>
+				</div>
+
+				<div class="grid grid-cols-6 gap-2 mb-4">
+					{#each commonEmojis as emoji}
+						<button
+							type="button"
+							on:click={() => selectEmoji(emoji)}
+							class="h-12 text-2xl rounded-lg border-2 border-gray-200 hover:border-blue-500 hover:bg-blue-50 transition-all"
+						>
+							{emoji}
+						</button>
+					{/each}
+				</div>
+
+				<div class="text-xs text-gray-500 text-center">
+					クリックしてアイコンを選択
+				</div>
 			</div>
 		</div>
 	</div>

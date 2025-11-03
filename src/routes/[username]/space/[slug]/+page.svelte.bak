@@ -20,7 +20,6 @@
 	let isEnrolled = false
 	let enrollmentStatus: string | null = null
 	let student: any = null
-	let instructorProfilesCache: Record<string, any> = {}
 	
 	// リダイレクト済みフラグ
 	let hasRedirected = false
@@ -47,11 +46,11 @@
 				.select('id, display_name, avatar_url, bio')
 				.eq('username', username)
 				.single()
-
+			
 			if (profileError || !profileData) {
 				throw new Error('講師が見つかりません')
 			}
-
+			
 			// スペース情報を取得
 			const { data: spaceData, error: spaceError } = await supabase
 				.from('spaces')
@@ -59,19 +58,19 @@
 				.eq('slug', slug)
 				.eq('instructor_id', profileData.id)
 				.single()
-
+			
 			if (spaceError) throw spaceError
 			if (!spaceData) throw new Error('スペースが見つかりません')
 			if (!spaceData.is_active) throw new Error('このスペースは現在利用できません')
-
+			
 			// 公開制御: 非公開スペースは404を表示
 			if (!spaceData.is_public) {
 				throw new Error('このページは公開されていません')
 			}
-
+			
 			space = spaceData
 			instructor = profileData  // プロフィールデータを講師情報として使用
-
+			
 			// 公開コース一覧を取得
 			const { data: coursesData, error: coursesError } = await supabase
 				.from('courses')
@@ -82,36 +81,10 @@
 				.eq('space_id', space.id)
 				.eq('is_published', true)
 				.order('created_at', { ascending: false })
-
+			
 			if (coursesError) throw coursesError
 			courses = coursesData || []
-
-			// ランディングページコンテンツから使用されている講師プロフィールIDを収集
-			const instructorProfileIds = new Set<string>()
-			if (space.landing_page_content?.sections) {
-				for (const section of space.landing_page_content.sections) {
-					if (section.type === 'instructor' && section.instructorProfileId) {
-						instructorProfileIds.add(section.instructorProfileId)
-					}
-				}
-			}
-
-			// 講師プロフィールを一括取得
-			if (instructorProfileIds.size > 0) {
-				const { data: profilesData, error: profilesError } = await supabase
-					.from('instructor_profiles')
-					.select('*')
-					.in('id', Array.from(instructorProfileIds))
-					.eq('is_active', true)
-
-				if (!profilesError && profilesData) {
-					// キャッシュに格納
-					for (const profile of profilesData) {
-						instructorProfilesCache[profile.id] = profile
-					}
-				}
-			}
-
+			
 		} catch (err: any) {
 			error = err.message
 			console.error('Load space data error:', err)
@@ -317,17 +290,15 @@
 					{/if}
 				{:else if section.type === 'instructor'}
 					<!-- 講師紹介 -->
-					{@const selectedProfile = section.instructorProfileId ? instructorProfilesCache[section.instructorProfileId] : null}
-					{@const displayProfile = selectedProfile || instructor}
-					{#if displayProfile}
+					{#if instructor}
 						<section class="py-16" style="background-color: {section.backgroundColor || '#ffffff'}; color: {section.textColor || '#111827'}">
 							<div class="container mx-auto px-6">
 								<div class="max-w-4xl mx-auto text-center">
 									<h2 class="text-3xl font-bold mb-8" style="color: {section.textColor || '#111827'}">{section.title}</h2>
 									<div class="flex flex-col md:flex-row items-center md:items-start space-y-6 md:space-y-0 md:space-x-8">
 										<div class="flex-shrink-0">
-											{#if displayProfile.avatar_url}
-												<img class="h-32 w-32 rounded-full object-cover" src={displayProfile.avatar_url} alt={displayProfile.display_name} />
+											{#if instructor.avatar_url}
+												<img class="h-32 w-32 rounded-full object-cover" src={instructor.avatar_url} alt={instructor.display_name} />
 											{:else}
 												<div class="h-32 w-32 rounded-full bg-gray-300 flex items-center justify-center">
 													<svg class="h-16 w-16 text-gray-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -337,18 +308,8 @@
 											{/if}
 										</div>
 										<div class="flex-1 text-center md:text-left">
-											<h3 class="text-2xl font-semibold mb-4" style="color: {section.textColor || '#111827'}">{displayProfile.display_name || 'Unknown Instructor'}</h3>
-											{#if selectedProfile}
-												<!-- 講師プロフィールが選択されている場合、そのbioを表示 -->
-												<p class="leading-relaxed opacity-80">{selectedProfile.bio || section.content}</p>
-												{#if section.content && selectedProfile.bio}
-													<!-- bioがあって、さらにcontentがある場合は追加で表示 -->
-													<p class="mt-4 leading-relaxed opacity-80">{section.content}</p>
-												{/if}
-											{:else}
-												<!-- 講師プロフィールが選択されていない場合は従来通り -->
-												<p class="leading-relaxed opacity-80">{section.content}</p>
-											{/if}
+											<h3 class="text-2xl font-semibold mb-4" style="color: {section.textColor || '#111827'}">{instructor.display_name || 'Unknown Instructor'}</h3>
+											<p class="leading-relaxed opacity-80">{section.content}</p>
 										</div>
 									</div>
 								</div>
@@ -376,40 +337,8 @@
 					<section class="py-16" style="background-color: {section.backgroundColor || '#ffffff'}; color: {section.textColor || '#111827'}">
 						<div class="container mx-auto px-6">
 							<h2 class="text-3xl font-bold text-center mb-12" style="color: {section.textColor || '#111827'}">{section.title}</h2>
-							<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 max-w-6xl mx-auto">
-								{#each section.content.split('\n').filter(line => line.trim().startsWith('•')) as feature, index}
-									{@const parts = feature.replace('•', '').trim().split(':')}
-									{@const featureTitle = parts[0]?.trim() || ''}
-									{@const featureDesc = parts[1]?.trim() || ''}
-									<div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow p-6">
-										<div class="w-12 h-12 rounded-lg flex items-center justify-center mb-4" style="background-color: {theme.primaryColor}">
-											{#if index === 0}
-												<!-- 設定アイコン -->
-												<svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"/>
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-												</svg>
-											{:else if index === 1}
-												<!-- ユーザーグループアイコン -->
-												<svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"/>
-												</svg>
-											{:else if index === 2}
-												<!-- 時計アイコン -->
-												<svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-												</svg>
-											{:else}
-												<!-- チェックマーク/バッジアイコン -->
-												<svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4M7.835 4.697a3.42 3.42 0 001.946-.806 3.42 3.42 0 014.438 0 3.42 3.42 0 001.946.806 3.42 3.42 0 013.138 3.138 3.42 3.42 0 00.806 1.946 3.42 3.42 0 010 4.438 3.42 3.42 0 00-.806 1.946 3.42 3.42 0 01-3.138 3.138 3.42 3.42 0 00-1.946.806 3.42 3.42 0 01-4.438 0 3.42 3.42 0 00-1.946-.806 3.42 3.42 0 01-3.138-3.138 3.42 3.42 0 00-.806-1.946 3.42 3.42 0 010-4.438 3.42 3.42 0 00.806-1.946 3.42 3.42 0 013.138-3.138z"/>
-												</svg>
-											{/if}
-										</div>
-										<h3 class="text-lg font-semibold text-gray-900 mb-2">{featureTitle}</h3>
-										<p class="text-sm text-gray-600">{featureDesc}</p>
-									</div>
-								{/each}
+							<div class="max-w-2xl mx-auto whitespace-pre-line">
+								{section.content}
 							</div>
 						</div>
 					</section>
