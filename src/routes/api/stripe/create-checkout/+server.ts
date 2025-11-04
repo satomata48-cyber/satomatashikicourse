@@ -2,9 +2,8 @@ import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { stripe } from '$lib/stripe-server';
 import { createSupabaseServiceRoleClient } from '$lib/supabase-server';
-import { PUBLIC_APP_URL } from '$env/static/public';
 
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, url }) => {
 	try {
 		const { courseId, priceId } = await request.json();
 
@@ -46,6 +45,9 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 		// 	return json({ error: 'Instructors cannot purchase their own courses' }, { status: 403 });
 		// }
 
+		// アプリケーションのベースURLを取得
+		const baseUrl = url.origin;
+
 		// Stripe Checkoutセッションを作成
 		const session = await stripe.checkout.sessions.create({
 			payment_method_types: ['card'],
@@ -56,8 +58,8 @@ export const POST: RequestHandler = async ({ request, locals }) => {
 				}
 			],
 			mode: 'payment',
-			success_url: `${PUBLIC_APP_URL}/purchase/success?session_id={CHECKOUT_SESSION_ID}&course_id=${courseId}`,
-			cancel_url: `${PUBLIC_APP_URL}/course/${courseId}`,
+			success_url: `${baseUrl}/purchase/success?session_id={CHECKOUT_SESSION_ID}&course_id=${courseId}`,
+			cancel_url: `${baseUrl}/course/${courseId}`,
 			metadata: {
 				courseId,
 				instructorId: course.space.instructor_id
