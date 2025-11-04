@@ -30,6 +30,13 @@
 	
 	async function loadDashboardData() {
 		try {
+			// 現在のユーザーを取得
+			const { data: { user } } = await supabase.auth.getUser()
+
+			if (!user) {
+				throw new Error('ログインが必要です')
+			}
+
 			// まずスペース情報をslugから取得
 			const { data: spaceData, error: spaceError } = await supabase
 				.from('spaces')
@@ -39,26 +46,41 @@
 				`)
 				.eq('slug', slug)
 				.single()
-			
+
 			if (spaceError || !spaceData) {
 				throw new Error('スペースが見つかりません')
 			}
-			
+
 			space = spaceData
-			
-			// 生徒がこのスペースに登録されているか確認
-			const { data: studentData, error: studentError } = await supabase
-				.from('space_students')
-				.select('*')
-				.eq('student_id', data.user.id)
-				.eq('space_id', space.id)
-				.single()
-			
-			if (studentError || !studentData) {
-				throw new Error('このスペースに登録されていません')
+
+			// 講師かどうかを確認
+			const isInstructor = space.instructor_id === user.id
+
+			// 講師の場合はプレビューモードとして表示
+			if (isInstructor) {
+				// 講師用のプレビューモード
+				student = {
+					id: user.id,
+					space_id: space.id,
+					status: 'active',
+					enrolled_at: new Date().toISOString(),
+					isPreview: true
+				}
+			} else {
+				// 生徒がこのスペースに登録されているか確認
+				const { data: studentData, error: studentError } = await supabase
+					.from('space_students')
+					.select('*')
+					.eq('student_id', user.id)
+					.eq('space_id', space.id)
+					.single()
+
+				if (studentError || !studentData) {
+					throw new Error('このスペースに登録されていません')
+				}
+
+				student = studentData
 			}
-			
-			student = studentData
 			
 			// コース一覧と進捗を取得
 			const { data: coursesData, error: coursesError } = await supabase

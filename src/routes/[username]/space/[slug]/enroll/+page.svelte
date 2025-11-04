@@ -179,7 +179,7 @@
 			}
 			
 			// 登録完了、生徒ダッシュボードにリダイレクト
-			goto(`/${username}/space/${slug}/dashboard`)
+			goto(`/${username}/space/${slug}/student`)
 			
 		} catch (err: any) {
 			error = err.message
@@ -237,7 +237,7 @@
 							ダッシュボードに移動しています...
 						</p>
 						<a
-							href="/{username}/space/{slug}/dashboard"
+							href="/{username}/space/{slug}/student"
 							class="inline-flex items-center bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 transition-colors"
 						>
 							ダッシュボードへ

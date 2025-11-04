@@ -18,13 +18,21 @@
 	
 	let recentActivities: any[] = []
 	let loading = true
-	
-	onMount(async () => {
-		await loadDashboardData()
-	})
-	
+
+	// usernameが設定されたらデータをロード
+	$: if (username) {
+		loadDashboardData()
+	}
+
 	async function loadDashboardData() {
 		try {
+			// usernameが設定されるまで待つ
+			if (!username) {
+				console.error('Username is not set')
+				loading = false
+				return
+			}
+
 			// まずusernameから講師IDを取得
 			const { data: profileData, error: profileError } = await supabase
 				.from('profiles')

@@ -27,6 +27,7 @@
 	let loading = false
 	let error = ''
 	let slugError = ''
+	let themeColor = '#3B82F6' // デフォルト
 	
 	// リアクティブ文でリダイレクト処理
 	$: if (username === 'undefined' && !redirecting) {
@@ -94,10 +95,10 @@
 			
 			const { data: spacesData, error: spacesError } = await supabase
 				.from('spaces')
-				.select('id, title, slug')
+				.select('id, title, slug, landing_page_content')
 				.eq('instructor_id', instructorId)
 				.order('title', { ascending: true })
-			
+
 			if (spacesError) throw spacesError
 			spaces = spacesData || []
 			
@@ -119,10 +120,20 @@
 				.replace(/\s+/g, '-')
 				.replace(/--+/g, '-')
 				.trim()
-			
+
 			if (!formData.slug || formData.slug === generatedSlug) {
 				formData.slug = generatedSlug
 			}
+		}
+	}
+
+	// スペースが選択されたらテーマカラーを更新
+	$: if (formData.spaceId && spaces.length > 0) {
+		const selectedSpace = spaces.find(s => s.id === formData.spaceId)
+		if (selectedSpace?.landing_page_content?.theme?.primaryColor) {
+			themeColor = selectedSpace.landing_page_content.theme.primaryColor
+		} else {
+			themeColor = '#3B82F6'
 		}
 	}
 	
@@ -196,6 +207,104 @@
 				slug = `course-${Date.now()}`
 			}
 
+			// 理想構成のセクション定義
+			const idealSections = [
+				{
+					id: Date.now().toString() + '-1',
+					type: 'space-header',
+					title: 'ヘッダー',
+					content: 'スペースのヘッダーが自動的に表示されます',
+					backgroundColor: '#ffffff',
+					textColor: '#111827'
+				},
+				{
+					id: Date.now().toString() + '-2',
+					type: 'course-info',
+					title: 'コース基本情報',
+					content: 'コースの基本情報が自動的に表示されます',
+					backgroundColor: '#ffffff',
+					textColor: '#111827'
+				},
+				{
+					id: Date.now().toString() + '-3',
+					type: 'lessons-list',
+					title: 'レッスン一覧',
+					content: 'レッスン管理ページと連動して自動表示されます',
+					backgroundColor: '#ffffff',
+					textColor: '#111827'
+				},
+				{
+					id: Date.now().toString() + '-4',
+					type: 'overview',
+					title: 'コースの概要',
+					content: `${formData.title}では、実践的なスキルを基礎から応用まで体系的に学ぶことができます。\n\n${formData.description || '初心者の方でも安心して受講いただけるよう、丁寧な解説と実践的な演習を用意しています。'}`,
+					backgroundColor: '#ffffff',
+					textColor: '#111827'
+				},
+				{
+					id: Date.now().toString() + '-5',
+					type: 'learning-outcomes',
+					title: 'このコースで学べること',
+					content: '学習内容をリスト形式で表示します',
+					backgroundColor: '#f9fafb',
+					textColor: '#111827',
+					features: [
+						{ icon: '📚', title: '体系的な学習', description: '基礎から応用まで段階的に学習できます' },
+						{ icon: '🎯', title: '実践プロジェクト', description: '実際のプロジェクトを通じて経験を積めます' },
+						{ icon: '💡', title: '実務スキル', description: '現場で即戦力となるスキルを習得できます' },
+						{ icon: '⭐', title: 'ベストプラクティス', description: '業界標準のアプローチを学べます' }
+					]
+				},
+				{
+					id: Date.now().toString() + '-6',
+					type: 'features',
+					title: 'このコースの特徴',
+					content: '特徴をリスト形式で表示します',
+					backgroundColor: '#ffffff',
+					textColor: '#111827',
+					features: [
+						{ icon: '⏰', title: '自分のペースで学習', description: 'いつでもどこでも好きな時間に学習できます' },
+						{ icon: '🎓', title: '実践重視のカリキュラム', description: 'すぐに使える実用的な内容が満載です' },
+						{ icon: '👥', title: '充実のサポート', description: '質問対応やフィードバックが充実しています' },
+						{ icon: '💼', title: '実務で使えるスキル', description: '現場で即戦力となる知識を習得できます' }
+					]
+				},
+				{
+					id: Date.now().toString() + '-7',
+					type: 'target-audience',
+					title: 'こんな方におすすめ',
+					content: '• これから学習を始めたい初心者の方\n• 基礎を体系的に学び直したい方\n• 実践的なスキルを身につけたい方\n• キャリアアップを目指している方',
+					backgroundColor: '#f9fafb',
+					textColor: '#111827'
+				},
+				{
+					id: Date.now().toString() + '-8',
+					type: 'prerequisites',
+					title: '前提知識',
+					content: 'このコースの受講にあたって、特別な前提知識は必要ありません。\n\n以下があると理解がスムーズです：\n• 基本的なPC操作\n• インターネットの基礎知識',
+					backgroundColor: '#ffffff',
+					textColor: '#111827'
+				},
+				{
+					id: Date.now().toString() + '-9',
+					type: 'faq',
+					title: 'よくある質問',
+					content: 'Q: 初心者でも受講できますか？\nA: はい、基礎から丁寧に解説しますので初心者の方でも安心して受講いただけます。\n\nQ: どのくらいの期間で完了できますか？\nA: 個人差はありますが、週3-5時間の学習で2-3ヶ月程度で完了できる内容です。\n\nQ: 質問はできますか？\nA: はい、コース内の質問機能からいつでも質問いただけます。',
+					backgroundColor: '#ffffff',
+					textColor: '#111827'
+				},
+				{
+					id: Date.now().toString() + '-10',
+					type: 'cta',
+					title: '今すぐ始めましょう',
+					content: 'このコースで、あなたのスキルを次のレベルへ引き上げませんか？',
+					buttonText: formData.isFree ? '今すぐ受講開始' : '今すぐ購入',
+					buttonUrl: '#',
+					backgroundColor: '#f9fafb',
+					textColor: '#111827'
+				}
+			]
+
 			const courseData = {
 				space_id: formData.spaceId,
 				title: formData.title,
@@ -206,12 +315,13 @@
 				currency: formData.currency,
 				is_published: formData.isPublished,
 				course_page_content: {
-					sections: [],
+					sections: idealSections,
 					metadata: {
 						title: formData.title,
 						description: formData.description || `${formData.title}で新しいスキルを習得`,
 						seoTitle: `${formData.title} | オンラインコース`,
-						seoDescription: formData.description || `${formData.title}で新しいスキルを身に付けませんか？`
+						seoDescription: formData.description || `${formData.title}で新しいスキルを身に付けませんか？`,
+						createdWith: 'ideal-template'
 					}
 				}
 			}
@@ -252,8 +362,11 @@
 		<h2 class="text-2xl font-bold text-gray-900 mb-2">新規コース作成</h2>
 		<p class="text-gray-600">スペース内で販売するコースを作成します</p>
 	</div>
-	
-	<div class="max-w-2xl">
+
+	<!-- 2カラムレイアウト -->
+	<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+		<!-- 左側：フォーム -->
+		<div>
 		<div class="bg-white rounded-lg shadow p-6">
 			{#if error}
 				<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6">
@@ -450,6 +563,101 @@
 					</div>
 				</form>
 			{/if}
+		</div>
+		</div>
+
+		<!-- 右側：プレビュー -->
+		<div class="lg:sticky lg:top-24 lg:self-start">
+			<div class="bg-white rounded-lg shadow p-6">
+				<h3 class="text-lg font-semibold text-gray-900 mb-4">プレビュー</h3>
+
+				<!-- コースカード -->
+				<div class="border border-gray-200 rounded-xl overflow-hidden hover:shadow-lg transition-shadow">
+					<!-- サムネイル -->
+					<div class="aspect-video bg-gray-100 flex items-center justify-center">
+						<svg class="w-16 h-16 text-gray-300" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+						</svg>
+					</div>
+
+					<!-- コンテンツ -->
+					<div class="p-6">
+						<div class="flex items-center justify-between mb-3">
+							<h4 class="text-xl font-bold text-gray-900">
+								{formData.title || 'コースタイトル'}
+							</h4>
+							{#if formData.isPublished}
+								<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+									公開
+								</span>
+							{:else}
+								<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
+									非公開
+								</span>
+							{/if}
+						</div>
+
+						<p class="text-gray-600 mb-4 line-clamp-3">
+							{formData.description || 'コースの説明がここに表示されます'}
+						</p>
+
+						<!-- 価格表示 -->
+						<div class="mb-4">
+							{#if formData.isFree}
+								<div class="inline-flex items-center px-4 py-2 rounded-lg bg-green-50 border border-green-200">
+									<svg class="w-5 h-5 text-green-600 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+									</svg>
+									<span class="text-lg font-bold text-green-700">無料</span>
+								</div>
+							{:else}
+								<div class="flex items-baseline">
+									<span class="text-3xl font-bold text-gray-900">
+										{new Intl.NumberFormat('ja-JP', {
+											style: 'currency',
+											currency: formData.currency
+										}).format(formData.price)}
+									</span>
+								</div>
+							{/if}
+						</div>
+
+						<!-- CTAボタン -->
+						<button
+							disabled
+							class="w-full py-3 px-6 rounded-lg font-semibold text-white text-center disabled:opacity-60 transition-opacity"
+							style="background-color: {themeColor || '#3B82F6'}"
+						>
+							{formData.isFree ? 'このコースを受講する' : 'このコースを購入する'}
+						</button>
+
+						<!-- 追加情報 -->
+						<div class="mt-4 pt-4 border-t border-gray-200">
+							<div class="flex items-center text-sm text-gray-500">
+								<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+								</svg>
+								<span>0 レッスン</span>
+							</div>
+						</div>
+					</div>
+				</div>
+
+				<!-- 理想構成について -->
+				<div class="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
+					<div class="flex items-start">
+						<svg class="w-5 h-5 text-blue-600 mt-0.5 mr-2 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 16h-1v-4h-1m1-4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+						</svg>
+						<div class="flex-1">
+							<h4 class="text-sm font-semibold text-blue-900 mb-1">自動で理想構成を適用</h4>
+							<p class="text-xs text-blue-700">
+								コース作成後、理想的なページ構成（10セクション）が自動的に適用されます。ページエディターでカスタマイズできます。
+							</p>
+						</div>
+					</div>
+				</div>
+			</div>
 		</div>
 	</div>
 </div>

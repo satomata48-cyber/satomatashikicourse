@@ -20,6 +20,7 @@
 	let isEnrolled = false
 	let enrollmentStatus: string | null = null
 	let student: any = null
+	let checkingEnrollment = true  // 登録状況チェック中フラグ
 	let instructorProfilesCache: Record<string, any> = {}
 	
 	// リダイレクト済みフラグ
@@ -64,8 +65,9 @@
 			if (!spaceData) throw new Error('スペースが見つかりません')
 			if (!spaceData.is_active) throw new Error('このスペースは現在利用できません')
 
-			// 公開制御: 非公開スペースは404を表示
-			if (!spaceData.is_public) {
+			// 公開制御: 講師本人または公開されている場合のみアクセス可能
+			const isInstructor = data?.user?.id === profileData.id
+			if (!isInstructor && spaceData.is_public === false) {
 				throw new Error('このページは公開されていません')
 			}
 
@@ -157,6 +159,8 @@
 		} catch (err) {
 			// 登録されていない場合はエラーになるが、それは正常
 			console.log('Not enrolled yet:', err)
+		} finally {
+			checkingEnrollment = false
 		}
 	}
 	
@@ -227,18 +231,20 @@
 									<span class="font-medium" style="color: {section.textColor || '#111827'}">{space.title}</span>
 								</div>
 								<div class="flex items-center space-x-4">
-									{#if student}
-										<span class="text-sm opacity-70">こんにちは、{student.display_name}さん</span>
-										<a href="/{username}/space/{slug}/student" class="font-medium transition-colors hover:opacity-70" style="color: {section.textColor || '#111827'}">
-											マイページ
-										</a>
-									{:else}
-										<button on:click={() => window.location.href = `/${username}/space/${slug}/login`} class="font-medium transition-colors hover:opacity-70" style="color: {section.textColor || '#111827'}">
-											ログイン
-										</button>
-										<a href="/{username}/space/{slug}/enroll" class="text-white px-4 py-2 rounded-lg font-medium transition-opacity hover:opacity-90" style="background-color: {theme.primaryColor}">
-											生徒登録
-										</a>
+									{#if !checkingEnrollment}
+										{#if isEnrolled && student}
+											<span class="text-sm opacity-70">こんにちは、{student.display_name}さん</span>
+											<a href="/{username}/space/{slug}/student" class="font-medium transition-colors hover:opacity-70" style="color: {section.textColor || '#111827'}">
+												マイページ
+											</a>
+										{:else}
+											<a href="/{username}/space/{slug}/student/login" class="font-medium transition-colors hover:opacity-70" style="color: {section.textColor || '#111827'}">
+												生徒ログイン
+											</a>
+											<a href="/{username}/space/{slug}/enroll" class="text-white px-4 py-2 rounded-lg font-medium transition-opacity hover:opacity-90" style="background-color: {theme.primaryColor}">
+												生徒登録
+											</a>
+										{/if}
 									{/if}
 								</div>
 							</div>
@@ -469,6 +475,23 @@
 								<span class="text-white font-bold text-sm">{space.title.charAt(0)}</span>
 							</div>
 							<span class="text-gray-900 font-medium">{space.title}</span>
+						</div>
+						<div class="flex items-center space-x-4">
+							{#if !checkingEnrollment}
+								{#if isEnrolled && student}
+									<span class="text-sm text-gray-600">こんにちは、{student.display_name}さん</span>
+									<a href="/{username}/space/{slug}/student" class="text-gray-900 font-medium hover:text-blue-600 transition-colors">
+										マイページ
+									</a>
+								{:else}
+									<a href="/{username}/space/{slug}/student/login" class="text-gray-900 font-medium hover:text-blue-600 transition-colors">
+										生徒ログイン
+									</a>
+									<a href="/{username}/space/{slug}/enroll" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+										生徒登録
+									</a>
+								{/if}
+							{/if}
 						</div>
 					</div>
 				</div>

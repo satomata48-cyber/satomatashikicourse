@@ -26,7 +26,6 @@
 	let error = ''
 	let slugError = ''
 	let successMessage = ''
-	let lessons: any[] = []
 	let themeColor = '#3B82F6'
 
 	onMount(async () => {
@@ -128,9 +127,6 @@
 			if (spaceData?.landing_page_content?.theme?.primaryColor) {
 				themeColor = spaceData.landing_page_content.theme.primaryColor
 			}
-
-			// レッスン一覧を取得
-			await loadLessons()
 		} catch (err: any) {
 			error = err.message
 			console.error('Load course error:', err)
@@ -139,24 +135,6 @@
 		}
 	}
 
-	async function loadLessons() {
-		try {
-			// courseオブジェクトから実際のIDを使用
-			if (!course?.id) return
-
-			const { data: lessonsData, error: lessonsError } = await supabase
-				.from('lessons')
-				.select('id, title, description, duration, order_index, is_published')
-				.eq('course_id', course.id)
-				.order('order_index', { ascending: true })
-
-			if (lessonsError) throw lessonsError
-			lessons = lessonsData || []
-		} catch (err: any) {
-			console.error('Load lessons error:', err)
-		}
-	}
-	
 	async function validateSlug() {
 		if (!formData.slug) {
 			slugError = 'スラッグは必須です'
@@ -239,7 +217,7 @@
 			saving = false
 		}
 	}
-	
+
 	async function togglePublished() {
 		try {
 			const newStatus = !course.is_published
@@ -261,23 +239,6 @@
 		} catch (err: any) {
 			error = err.message
 		}
-	}
-
-	function formatDuration(seconds: number): string {
-		const minutes = Math.floor(seconds / 60)
-		const remainingSeconds = seconds % 60
-		return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
-	}
-
-	function getTotalDuration(): number {
-		return lessons.reduce((total, lesson) => total + (lesson.duration || 0), 0)
-	}
-
-	function formatCurrency(price: number, currency: string): string {
-		return new Intl.NumberFormat('ja-JP', {
-			style: 'currency',
-			currency: currency
-		}).format(price)
 	}
 </script>
 
@@ -325,11 +286,8 @@
 			</div>
 		</div>
 
-		<!-- 2カラムレイアウト -->
-		<div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
-			<!-- 左側：編集フォーム -->
-			<div>
-			<div class="bg-white rounded-lg shadow p-6">
+		<!-- 編集フォーム -->
+		<div class="bg-white rounded-lg shadow p-6">
 				{#if error}
 					<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6">
 						{error}
@@ -442,108 +400,5 @@
 					</div>
 				</form>
 			</div>
-			</div>
-
-			<!-- 右側：プレビュー -->
-			<div class="lg:sticky lg:top-24 lg:self-start">
-				<div class="bg-white rounded-lg shadow p-6">
-					<h3 class="text-lg font-semibold text-gray-900 mb-4">プレビュー</h3>
-
-					<!-- コースヘッダー -->
-					<div
-						class="rounded-lg p-6 text-white mb-6"
-						style="background: linear-gradient(135deg, {themeColor}, color-mix(in srgb, {themeColor} 80%, transparent))"
-					>
-						<h1 class="text-2xl font-bold mb-2">{formData.title || 'コースタイトル'}</h1>
-						<p class="text-white/90 mb-4">{formData.description || 'コースの説明がここに表示されます'}</p>
-
-						<!-- コース統計 -->
-						<div class="flex flex-wrap gap-4 text-sm text-white/90">
-							<div class="flex items-center">
-								<svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-								</svg>
-								{lessons.length} レッスン
-							</div>
-							<div class="flex items-center">
-								<svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-								</svg>
-								{formatDuration(getTotalDuration())}
-							</div>
-						</div>
-					</div>
-
-					<!-- 価格表示 -->
-					<div class="mb-6">
-						<div class="bg-gray-50 rounded-lg p-4 text-center">
-							{#if formData.isFree}
-								<div class="text-2xl font-bold text-gray-900">無料コース</div>
-								<p class="text-sm text-gray-600 mt-1">誰でもアクセスできます</p>
-							{:else}
-								<div class="text-3xl font-bold text-gray-900 mb-1">
-									{formatCurrency(formData.price, formData.currency)}
-								</div>
-								<p class="text-sm text-gray-600">購入が必要です</p>
-							{/if}
-						</div>
-					</div>
-
-					<!-- レッスン一覧 -->
-					<div>
-						<h4 class="text-sm font-semibold text-gray-900 mb-3">コンテンツ</h4>
-						{#if lessons.length === 0}
-							<p class="text-sm text-gray-500 text-center py-4">レッスンがまだありません</p>
-						{:else}
-							<div class="space-y-2">
-								{#each lessons as lesson, index}
-									<div class="flex items-start space-x-3 p-3 bg-gray-50 rounded-lg">
-										<div class="flex-shrink-0 w-6 h-6 rounded-full bg-gray-200 flex items-center justify-center">
-											<span class="text-xs text-gray-600 font-medium">{index + 1}</span>
-										</div>
-										<div class="flex-1 min-w-0">
-											<h5 class="text-sm font-medium text-gray-900 truncate">{lesson.title}</h5>
-											{#if lesson.description}
-												<p class="text-xs text-gray-600 mt-1 line-clamp-2">{lesson.description}</p>
-											{/if}
-											<div class="flex items-center mt-1 text-xs text-gray-500">
-												<svg class="h-3 w-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
-												</svg>
-												{formatDuration(lesson.duration)}
-												{#if !lesson.is_published}
-													<span class="ml-2 text-yellow-600">• 非公開</span>
-												{/if}
-											</div>
-										</div>
-									</div>
-								{/each}
-							</div>
-						{/if}
-						<a
-							href="/{username}/courses/{course.slug || courseId}/lessons"
-							class="block mt-4 text-center text-sm text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
-							style="background-color: {themeColor}"
-						>
-							レッスンを管理
-						</a>
-					</div>
-
-					<!-- 公開ページへのリンク -->
-					<div class="mt-6 pt-6 border-t border-gray-200">
-						<a
-							href="/{username}/space/{course.space.slug}/course/{course.slug || courseId}"
-							target="_blank"
-							class="flex items-center justify-center text-sm text-gray-600 hover:text-gray-900 transition-colors"
-						>
-							<svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-							</svg>
-							公開ページで確認
-						</a>
-					</div>
-				</div>
-			</div>
-		</div>
 	{/if}
 </div>

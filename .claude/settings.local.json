@@ -30,7 +30,8 @@
       "Bash(\"C:\\Users\\lipto\\desktop\\satomatashikicourse\\src\\routes\\[username]\\space\\[slug]\\+page.svelte.tmp\")",
       "Bash(echo:*)",
       "Bash(npx supabase migration:*)",
-      "Bash(npx supabase db push:*)"
+      "Bash(npx supabase db push:*)",
+      "Bash(xcopy:*)"
     ],
     "deny": [],
     "ask": []

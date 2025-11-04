@@ -350,10 +350,30 @@
 		</div>
 	{:else if course}
 		<!-- Header -->
-		<div class="mb-6">
+		<div class="mb-6 flex items-center justify-between">
 			<div>
 				<h2 class="text-2xl font-bold text-gray-900 mb-2">レッスン管理</h2>
 				<p class="text-gray-600">コース: {course.title}</p>
+			</div>
+			<div class="flex items-center space-x-3">
+				<button
+					on:click={() => {
+						const selectedSpace = course.space
+						if (selectedSpace && course) {
+							window.open(`/${username}/space/${selectedSpace.slug}/course/${course.slug || course.id}`, '_blank')
+						}
+					}}
+					class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-sm font-medium"
+				>
+					プレビュー
+				</button>
+				<button
+					on:click={createLesson}
+					disabled={createLoading || !newLesson.title}
+					class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm font-medium"
+				>
+					{createLoading ? '保存中...' : '保存'}
+				</button>
 			</div>
 		</div>
 		
@@ -495,22 +515,24 @@
 							</div>
 
 							<div class="flex space-x-3 pt-4 border-t border-gray-200">
-								<button
-									type="button"
-									on:click={() => showCreateForm = false}
-									class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-								>
-									キャンセル
-								</button>
+								{#if editMode}
+									<button
+										type="button"
+										on:click={cancelEdit}
+										class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+									>
+										編集をキャンセル
+									</button>
+								{/if}
 								<button
 									type="submit"
 									disabled={createLoading}
 									class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
 								>
 									{#if createLoading}
-										{editMode ? '更新中...' : '作成中...'}
+										保存中...
 									{:else}
-										{editMode ? 'レッスンを更新' : 'レッスンを作成'}
+										保存
 									{/if}
 								</button>
 							</div>

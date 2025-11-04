@@ -8,19 +8,25 @@
 
 	const supabase = createSupabaseBrowserClient()
 
-	$: username = $page.params.username
-	$: currentPath = $page.url.pathname
+	let username: string
+	let currentPath: string
+
+	$: {
+		username = $page.params.username
+		currentPath = $page.url.pathname
+	}
 
 	// 公開ページかどうかの判定
-	$: isPublicPage = currentPath.includes('/space/')
+	$: isPublicPage = currentPath?.includes('/space/') || false
 
 	// ページタイトルの取得
 	function getPageTitle(): string {
-		if (currentPath.includes('/dashboard')) return 'ダッシュボード'
-		if (currentPath.includes('/spaces')) return 'スペース管理'
-		if (currentPath.includes('/courses')) return 'コース管理'
-		if (currentPath.includes('/instructor-profiles')) return '講師プロフィール管理'
-		if (currentPath.includes('/profile')) return '講師プロフィール'
+		if (currentPath?.includes('/dashboard')) return 'ダッシュボード'
+		if (currentPath?.includes('/spaces')) return 'スペース管理'
+		if (currentPath?.includes('/courses')) return 'コース管理'
+		if (currentPath?.includes('/student-pages')) return '生徒ページ管理'
+		if (currentPath?.includes('/instructor-profiles')) return '講師プロフィール管理'
+		if (currentPath?.includes('/profile')) return '講師プロフィール'
 		return '詳細'
 	}
 </script>
@@ -34,10 +40,12 @@
 	<!-- 管理画面：サイドバーありのレイアウト -->
 	<div class="min-h-screen bg-gray-50 flex">
 		<!-- Sidebar -->
-		<InstructorSidebar username={username} userEmail={data?.user?.email || ''} />
+		{#if username}
+			<InstructorSidebar username={username} userEmail={data?.user?.email || ''} />
+		{/if}
 
 		<!-- Main Content Area -->
-		<div class="flex-1 ml-64">
+		<div class="flex-1" class:ml-64={username}>
 			<!-- Header -->
 			<header class="bg-white shadow-sm border-b border-gray-200 sticky top-0 z-5">
 				<div class="px-4 sm:px-6 lg:px-8">

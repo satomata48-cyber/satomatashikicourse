@@ -8,6 +8,7 @@
 
 	let course: any = null
 	let space: any = null
+	let lessons: any[] = []
 	let loading = true
 	let saving = false
 	let error = ''
@@ -120,6 +121,42 @@
 
 	// コース詳細ページ向けのセクションテンプレート
 	const templates = [
+		{
+			name: 'コース基本情報',
+			icon: '📋',
+			description: 'タイトル、説明、サムネイル、価格を表示',
+			template: {
+				type: 'course-info',
+				title: 'コース情報',
+				content: 'コースの基本情報が自動的に表示されます',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		},
+		{
+			name: 'レッスン一覧',
+			icon: '📚',
+			description: 'コースのレッスン一覧を自動表示',
+			template: {
+				type: 'lessons-list',
+				title: 'レッスン一覧',
+				content: 'レッスン管理ページと連動して自動表示されます',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		},
+		{
+			name: '理想構成を挿入',
+			icon: '✨',
+			description: 'コース詳細ページに最適なセクション構成を一括追加',
+			template: {
+				type: 'ideal-template',
+				title: '理想構成',
+				content: '複数のセクションを一括追加',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		},
 		{
 			name: 'コース概要',
 			icon: '📚',
@@ -242,6 +279,18 @@
 				backgroundColor: '#ffffff',
 				textColor: '#111827'
 			}
+		},
+		{
+			name: 'スペースフッター',
+			icon: '📍',
+			description: 'スペースのフッターを自動表示（スペース設定から継承）',
+			template: {
+				type: 'space-footer',
+				title: 'フッター',
+				content: 'スペースのフッターが自動的に表示されます',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
 		}
 	]
 
@@ -338,11 +387,31 @@
 				]
 			}
 
+			// レッスン一覧を取得
+			await loadLessons()
+
 		} catch (err: any) {
 			error = err.message
 			console.error('Load error:', err)
 		} finally {
 			loading = false
+		}
+	}
+
+	async function loadLessons() {
+		try {
+			if (!course?.id) return
+
+			const { data: lessonsData, error: lessonsError } = await supabase
+				.from('lessons')
+				.select('id, title, description, content, video_url, video_type, duration, order_index, is_published')
+				.eq('course_id', course.id)
+				.order('order_index', { ascending: true })
+
+			if (lessonsError) throw lessonsError
+			lessons = lessonsData || []
+		} catch (err: any) {
+			console.error('Load lessons error:', err)
 		}
 	}
 
@@ -388,11 +457,94 @@
 	}
 
 	function addSection(template: any) {
+		// 理想構成を挿入する場合
+		if (template.type === 'ideal-template') {
+			addIdealTemplate()
+			return
+		}
+
 		const newSection: Section = {
 			id: Date.now().toString(),
 			...template
 		}
 		sections = [...sections, newSection]
+	}
+
+	function addIdealTemplate() {
+		// 理想構成: 7セクション（ヘッダーは除外、フッター含む）
+		const idealSections: Section[] = [
+			{
+				id: Date.now().toString() + '-1',
+				type: 'course-info',
+				title: 'コース基本情報',
+				content: 'コースの基本情報が自動的に表示されます',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			},
+			{
+				id: Date.now().toString() + '-2',
+				type: 'learning-outcomes',
+				title: 'このコースで学べること',
+				content: '学習内容をリスト形式で表示します',
+				backgroundColor: '#f9fafb',
+				textColor: '#111827',
+				features: [
+					{ icon: '📚', title: '体系的な学習', description: '基礎から応用まで段階的に学習できます' },
+					{ icon: '🎯', title: '実践プロジェクト', description: '実際のプロジェクトを通じて経験を積めます' },
+					{ icon: '💡', title: '実務スキル', description: '現場で即戦力となるスキルを習得できます' },
+					{ icon: '⭐', title: 'ベストプラクティス', description: '業界標準のアプローチを学べます' }
+				]
+			},
+			{
+				id: Date.now().toString() + '-3',
+				type: 'lessons-list',
+				title: 'レッスン一覧',
+				content: 'レッスン管理ページと連動して自動表示されます',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			},
+			{
+				id: Date.now().toString() + '-4',
+				type: 'features',
+				title: 'このコースの特徴',
+				content: '特徴をリスト形式で表示します',
+				backgroundColor: '#f9fafb',
+				textColor: '#111827',
+				features: [
+					{ icon: '⏰', title: '自分のペースで学習', description: 'いつでもどこでも好きな時間に学習できます' },
+					{ icon: '🎓', title: '実践重視のカリキュラム', description: 'すぐに使える実用的な内容が満載です' },
+					{ icon: '👥', title: '充実のサポート', description: '質問対応やフィードバックが充実しています' },
+					{ icon: '💼', title: '実務で使えるスキル', description: '現場で即戦力となる知識を習得できます' }
+				]
+			},
+			{
+				id: Date.now().toString() + '-5',
+				type: 'target-audience',
+				title: 'こんな方におすすめ',
+				content: '• これから学習を始めたい初心者の方\n• 基礎を体系的に学び直したい方\n• 実践的なスキルを身につけたい方\n• キャリアアップを目指している方',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			},
+			{
+				id: Date.now().toString() + '-6',
+				type: 'faq',
+				title: 'よくある質問',
+				content: 'Q: 初心者でも受講できますか？\nA: はい、基礎から丁寧に解説しますので初心者の方でも安心して受講いただけます。\n\nQ: どのくらいの期間で完了できますか？\nA: 個人差はありますが、週3-5時間の学習で2-3ヶ月程度で完了できる内容です。\n\nQ: 質問はできますか？\nA: はい、コース内の質問機能からいつでも質問いただけます。',
+				backgroundColor: '#f9fafb',
+				textColor: '#111827'
+			},
+			{
+				id: Date.now().toString() + '-7',
+				type: 'space-footer',
+				title: 'フッター',
+				content: 'スペースのフッターが自動的に表示されます',
+				backgroundColor: '#ffffff',
+				textColor: '#111827'
+			}
+		]
+
+		// 既存のセクションをリセットしてから理想構成を挿入
+		sections = [...idealSections]
 	}
 
 	function moveSection(index: number, direction: 'up' | 'down') {
@@ -459,6 +611,14 @@
 					<span class="text-xs text-gray-500">(スペースから継承)</span>
 				</div>
 				{#if course}
+					<button
+						on:click={addIdealTemplate}
+						class="px-4 py-2 text-white rounded-lg hover:opacity-90 transition-opacity text-sm font-medium"
+						style="background-color: {themeColor}"
+						title="理想的なセクション構成を一括追加"
+					>
+						✨ 理想構成を挿入
+					</button>
 					<button
 						on:click={previewPage}
 						class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-sm"
@@ -579,13 +739,47 @@
 									<!-- 詳細編集部分（開閉） -->
 									{#if expandedSections.has(section.id)}
 										<div class="p-3 pt-0 border-t border-gray-100">
-											<input
-												type="text"
-												bind:value={section.title}
-												class="w-full text-xs border border-gray-300 rounded px-2 py-1 mb-2"
-												placeholder="タイトル"
-											/>
-											{#if section.type !== 'features' && section.type !== 'learning-outcomes'}
+											{#if section.type === 'space-header'}
+												<div class="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+													<div class="font-medium mb-1">📌 スペースヘッダー自動表示</div>
+													<p class="text-gray-500">
+														スペース設定のヘッダー情報が自動的に表示されます。<br>
+														編集するには「<a href="/{data.username}/spaces" class="text-blue-600 hover:underline">スペース管理</a>」から設定してください。
+													</p>
+												</div>
+											{:else if section.type === 'course-info'}
+												<div class="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+													<div class="font-medium mb-1">📌 コース情報自動表示</div>
+													<p class="text-gray-500">
+														コースのタイトル、説明、サムネイル、価格が自動的に表示されます。<br>
+														編集するには「<a href="/{data.username}/courses/{data.courseId}/edit" class="text-blue-600 hover:underline">コース編集</a>」から設定してください。
+													</p>
+												</div>
+											{:else if section.type === 'lessons-list'}
+												<div class="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+													<div class="font-medium mb-1">📌 レッスン一覧自動表示</div>
+													<p class="text-gray-500">
+														レッスン管理ページで作成したレッスンが自動的に表示されます。<br>
+														編集するには「<a href="/{data.username}/courses/{data.courseId}/lessons" class="text-blue-600 hover:underline">レッスン管理</a>」から設定してください。
+													</p>
+												</div>
+											{:else if section.type === 'space-footer'}
+												<div class="text-xs text-gray-600 bg-blue-50 border border-blue-200 rounded px-3 py-2">
+													<div class="font-medium mb-1">📌 スペースフッター自動表示</div>
+													<p class="text-gray-500">
+														スペース設定のフッター情報が自動的に表示されます。<br>
+														編集するには「<a href="/{data.username}/spaces" class="text-blue-600 hover:underline">スペース管理</a>」から設定してください。
+													</p>
+												</div>
+											{:else}
+												<input
+													type="text"
+													bind:value={section.title}
+													class="w-full text-xs border border-gray-300 rounded px-2 py-1 mb-2"
+													placeholder="タイトル"
+												/>
+											{/if}
+											{#if section.type !== 'features' && section.type !== 'learning-outcomes' && section.type !== 'space-header' && section.type !== 'course-info'}
 												<textarea
 													bind:value={section.content}
 													rows="3"
@@ -720,14 +914,304 @@
 					<!-- プレビューヘッダー -->
 					<div class="bg-gray-50 border-b border-gray-200 px-4 py-3">
 						<h2 class="text-sm font-semibold text-gray-900">プレビュー</h2>
-						<p class="text-xs text-gray-500 mt-1">※ 実際のページではヘッダー、レッスン一覧、フッターが追加されます</p>
+						<p class="text-xs text-gray-500 mt-1">※ 実際のページと同じ表示です</p>
 					</div>
 
 					<!-- プレビューコンテンツ -->
-					<div class="min-h-screen bg-white">
+					<div class="min-h-screen bg-gray-50">
+						<!-- トップナビゲーション（固定） -->
+						<nav class="bg-white shadow-sm border-b">
+							<div class="max-w-7xl mx-auto px-6 py-4">
+								<div class="flex justify-between items-center">
+									<!-- 左側：スペース名とコース名 -->
+									<div class="flex items-center space-x-2">
+										<div class="w-8 h-8 rounded-lg flex items-center justify-center" style="background-color: {themeColor}">
+											<span class="text-white font-bold text-sm">{space?.title?.charAt(0) || 'S'}</span>
+										</div>
+										<div class="flex items-center space-x-2 text-sm text-gray-600">
+											<span class="hover:text-gray-900 font-medium transition-colors">
+												{space?.title || 'スペース名'}
+											</span>
+											<svg class="h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+											</svg>
+											<span class="text-gray-900 font-medium">{course?.title || 'コース名'}</span>
+										</div>
+									</div>
+
+									<!-- 右側：生徒向けアクションボタン（プレビュー） -->
+									<div class="flex items-center space-x-4">
+										<button class="text-gray-600 hover:text-gray-900 font-medium transition-colors text-sm">
+											ログイン
+										</button>
+										<button
+											class="text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity text-sm"
+											style="background-color: {themeColor}"
+										>
+											生徒登録
+										</button>
+									</div>
+								</div>
+							</div>
+						</nav>
+
+						<!-- ヘッダー（固定） -->
+						<header
+							class="py-16 text-white relative overflow-hidden"
+							style="background: linear-gradient(135deg, {themeColor}, color-mix(in srgb, {themeColor} 80%, transparent))"
+						>
+							<div class="absolute inset-0 bg-black opacity-10"></div>
+							<div class="relative container mx-auto px-6">
+								<div class="max-w-4xl mx-auto">
+									<div class="flex flex-col lg:flex-row lg:items-start lg:space-x-8">
+										<div class="flex-1">
+											<h1 class="text-4xl font-bold mb-4">{course?.title || 'コースタイトル'}</h1>
+											<p class="text-xl text-white/90 mb-6">{course?.description || 'コースの説明がここに表示されます'}</p>
+
+											<!-- コース統計 -->
+											<div class="flex flex-wrap gap-6 text-white/90 mb-6">
+												<div class="flex items-center">
+													<svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+													</svg>
+													{lessons?.length || 0} レッスン
+												</div>
+												<div class="flex items-center">
+													<svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+													</svg>
+													{Math.floor((lessons?.reduce((sum, l) => sum + (l.duration || 0), 0) || 0) / 60)}:{String((lessons?.reduce((sum, l) => sum + (l.duration || 0), 0) || 0) % 60).padStart(2, '0')}
+												</div>
+											</div>
+										</div>
+
+										<!-- 価格・アクションエリア -->
+										<div class="lg:w-80">
+											<div class="bg-white/10 backdrop-blur-sm rounded-lg p-6">
+												{#if course?.is_free}
+													<div class="text-center mb-4">
+														<span class="text-2xl font-bold">無料コース</span>
+													</div>
+												{:else}
+													<div class="text-center mb-4">
+														<div class="text-3xl font-bold">¥{(course?.price || 0).toLocaleString()}</div>
+													</div>
+												{/if}
+
+												<button class="block w-full text-center bg-white text-gray-900 py-3 px-6 rounded-lg font-semibold hover:bg-gray-100 transition-colors">
+													{course?.is_free ? '学習を始める' : '今すぐ購入'}
+												</button>
+											</div>
+										</div>
+									</div>
+								</div>
+							</div>
+						</header>
+
+						<!-- カスタムセクション -->
 						{#each sections as section}
 							<div class="border-b border-gray-100 last:border-b-0">
-								{#if section.type === 'overview' || section.type === 'prerequisites' || section.type === 'target-audience' || section.type === 'text'}
+								{#if section.type === 'space-header'}
+									<!-- スペースヘッダー（スペース設定から自動表示） -->
+									{#if space?.landing_page_content?.sections}
+										{@const headerSection = space.landing_page_content.sections.find(s => s.type === 'hero' || s.type === 'header')}
+										{#if headerSection}
+											<section
+												class="py-20 relative overflow-hidden"
+												style="background-color: {headerSection.backgroundColor || themeColor}"
+											>
+												<div class="px-6 max-w-5xl mx-auto relative z-10">
+													<div class="text-center">
+														<h1 class="text-5xl font-bold mb-6" style="color: {headerSection.textColor || '#ffffff'}">
+															{headerSection.title || space.title}
+														</h1>
+														<p class="text-xl mb-8 opacity-90" style="color: {headerSection.textColor || '#ffffff'}">
+															{headerSection.content || space.description || ''}
+														</p>
+													</div>
+												</div>
+											</section>
+										{:else}
+											<!-- デフォルトヘッダー -->
+											<section
+												class="py-20 relative overflow-hidden"
+												style="background: linear-gradient(135deg, {themeColor}, color-mix(in srgb, {themeColor} 80%, transparent))"
+											>
+												<div class="px-6 max-w-5xl mx-auto relative z-10">
+													<div class="text-center">
+														<h1 class="text-5xl font-bold text-white mb-6">
+															{space.title}
+														</h1>
+														<p class="text-xl text-white/90 mb-8">
+															{space.description || 'オンライン学習スペース'}
+														</p>
+													</div>
+												</div>
+											</section>
+										{/if}
+									{:else}
+										<!-- デフォルトヘッダー（スペース情報がない場合） -->
+										<section
+											class="py-20 relative overflow-hidden"
+											style="background: linear-gradient(135deg, {themeColor}, color-mix(in srgb, {themeColor} 80%, transparent))"
+										>
+											<div class="px-6 max-w-5xl mx-auto relative z-10">
+												<div class="text-center">
+													<h1 class="text-5xl font-bold text-white mb-6">
+														{space?.title || 'スペース名'}
+													</h1>
+													<p class="text-xl text-white/90 mb-8">
+														{space?.description || 'オンライン学習スペース'}
+													</p>
+												</div>
+											</div>
+										</section>
+									{/if}
+								{:else if section.type === 'course-info'}
+									<!-- コース基本情報 -->
+									<section class="py-12" style="background-color: {section.backgroundColor || '#ffffff'}">
+										<div class="px-6 max-w-5xl mx-auto">
+											<div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+												<!-- サムネイル -->
+												<div>
+													{#if course?.thumbnail_url}
+														<img src={course.thumbnail_url} alt={course.title} class="w-full aspect-video object-cover rounded-lg shadow-lg" />
+													{:else}
+														<div class="w-full aspect-video bg-gray-200 rounded-lg shadow-lg flex items-center justify-center">
+															<svg class="w-24 h-24 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z"/>
+															</svg>
+														</div>
+													{/if}
+												</div>
+
+												<!-- コース情報 -->
+												<div>
+													<h1 class="text-4xl font-bold mb-4" style="color: {section.textColor || '#111827'}">{course?.title}</h1>
+													<p class="text-lg text-gray-600 mb-6">{course?.description || 'コースの説明がここに表示されます'}</p>
+
+													<div class="space-y-3 mb-6">
+														<div class="flex items-center text-gray-700">
+															<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+															</svg>
+															{#if course?.is_free}
+																<span class="font-semibold text-green-600">無料</span>
+															{:else if course?.price}
+																<span class="font-semibold">¥{course.price.toLocaleString()}</span>
+															{:else}
+																<span class="text-gray-500">価格未設定</span>
+															{/if}
+														</div>
+
+														<div class="flex items-center text-gray-700">
+															<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+															</svg>
+															<span>{course?.is_published ? '公開中' : '非公開'}</span>
+														</div>
+													</div>
+
+													<button class="w-full py-3 px-6 rounded-lg font-semibold text-white text-lg hover:opacity-90 transition-opacity" style="background-color: {themeColor}">
+														{course?.is_free ? 'このコースを受講する' : 'このコースを購入する'}
+													</button>
+												</div>
+											</div>
+										</div>
+									</section>
+								{:else if section.type === 'lessons-list'}
+									<!-- レッスン一覧（レッスン管理から自動表示） -->
+									<section class="py-12" style="background-color: {section.backgroundColor || '#ffffff'}">
+										<div class="px-6 max-w-5xl mx-auto">
+											<h2 class="text-3xl font-bold mb-8 text-center" style="color: {section.textColor || '#111827'}">{section.title}</h2>
+											{#if lessons.length === 0}
+												<div class="text-center py-12">
+													<svg class="mx-auto h-16 w-16 text-gray-300 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+													</svg>
+													<p class="text-gray-500 text-lg mb-2">レッスンがまだありません</p>
+													<p class="text-gray-400 text-sm mb-6">レッスン管理ページからレッスンを追加してください</p>
+													<a
+														href="/{data.username}/courses/{data.courseId}/lessons"
+														class="inline-block px-6 py-3 rounded-lg font-semibold text-white hover:opacity-90 transition-opacity"
+														style="background-color: {themeColor}"
+													>
+														レッスンを追加
+													</a>
+												</div>
+											{:else}
+												<div class="space-y-4">
+													{#each lessons as lesson, index}
+														<div class="bg-white border border-gray-200 rounded-xl p-6 hover:shadow-md transition-shadow">
+															<div class="flex items-start space-x-4">
+																<!-- レッスン番号 -->
+																<div class="flex-shrink-0">
+																	<div class="w-12 h-12 rounded-full flex items-center justify-center text-lg font-bold text-white" style="background-color: {themeColor}">
+																		{index + 1}
+																	</div>
+																</div>
+
+																<!-- レッスン内容 -->
+																<div class="flex-1 min-w-0">
+																	<div class="flex items-center justify-between mb-2">
+																		<h3 class="text-xl font-bold text-gray-900">{lesson.title}</h3>
+																		<div class="flex items-center space-x-2">
+																			{#if lesson.duration}
+																				<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-700">
+																					<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+																					</svg>
+																					{Math.round(lesson.duration / 60)}分
+																				</span>
+																			{/if}
+																			{#if !lesson.is_published}
+																				<span class="inline-flex items-center px-3 py-1 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800">
+																					非公開
+																				</span>
+																			{/if}
+																		</div>
+																	</div>
+
+																	{#if lesson.description}
+																		<p class="text-gray-600 mb-3">{lesson.description}</p>
+																	{/if}
+
+																	<div class="flex items-center text-sm text-gray-500">
+																		{#if lesson.video_type === 'youtube'}
+																			<svg class="w-4 h-4 mr-1 text-red-500" fill="currentColor" viewBox="0 0 24 24">
+																				<path d="M23.498 6.186a3.016 3.016 0 0 0-2.122-2.136C19.505 3.545 12 3.545 12 3.545s-7.505 0-9.377.505A3.017 3.017 0 0 0 .502 6.186C0 8.07 0 12 0 12s0 3.93.502 5.814a3.016 3.016 0 0 0 2.122 2.136c1.871.505 9.376.505 9.376.505s7.505 0 9.377-.505a3.015 3.015 0 0 0 2.122-2.136C24 15.93 24 12 24 12s0-3.93-.502-5.814zM9.545 15.568V8.432L15.818 12l-6.273 3.568z"/>
+																			</svg>
+																			<span>YouTube動画</span>
+																		{:else if lesson.content}
+																			<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
+																			</svg>
+																			<span>テキストコンテンツ</span>
+																		{/if}
+																	</div>
+																</div>
+															</div>
+														</div>
+													{/each}
+												</div>
+
+												<!-- レッスン管理へのリンク -->
+												<div class="mt-8 text-center">
+													<a
+														href="/{data.username}/courses/{data.courseId}/lessons"
+														class="inline-flex items-center text-sm hover:underline"
+														style="color: {themeColor}"
+													>
+														<svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"/>
+														</svg>
+														レッスンを編集
+													</a>
+												</div>
+											{/if}
+										</div>
+									</section>
+								{:else if section.type === 'overview' || section.type === 'prerequisites' || section.type === 'target-audience' || section.type === 'text'}
 									<!-- テキストセクション -->
 									<section class="py-12" style="background-color: {section.backgroundColor || '#ffffff'}; color: {section.textColor || '#111827'}">
 										<div class="px-6 max-w-4xl mx-auto">
@@ -793,6 +1277,44 @@
 											{/if}
 										</div>
 									</section>
+								{:else if section.type === 'space-footer'}
+									<!-- スペースフッター（スペース設定から自動表示） -->
+									{#if space?.landing_page_content?.sections}
+										{@const footerSection = space.landing_page_content.sections.find(s => s.type === 'footer')}
+										{#if footerSection}
+											<footer class="py-8" style="background-color: {footerSection.backgroundColor || '#1f2937'}; color: {footerSection.textColor || '#ffffff'}">
+												<div class="container mx-auto px-6">
+													<div class="max-w-7xl mx-auto">
+														<div class="text-center">
+															<p class="text-sm opacity-80">{footerSection.content}</p>
+														</div>
+													</div>
+												</div>
+											</footer>
+										{:else}
+											<!-- デフォルトフッター -->
+											<footer class="py-8 bg-gray-800 text-white">
+												<div class="container mx-auto px-6">
+													<div class="max-w-7xl mx-auto">
+														<div class="text-center">
+															<p class="text-sm opacity-80">© {new Date().getFullYear()} {space?.title || 'スペース名'}. All rights reserved.</p>
+														</div>
+													</div>
+												</div>
+											</footer>
+										{/if}
+									{:else}
+										<!-- デフォルトフッター（スペース情報がない場合） -->
+										<footer class="py-8 bg-gray-800 text-white">
+											<div class="container mx-auto px-6">
+												<div class="max-w-7xl mx-auto">
+													<div class="text-center">
+														<p class="text-sm opacity-80">© {new Date().getFullYear()} {space?.title || 'スペース名'}. All rights reserved.</p>
+													</div>
+												</div>
+											</div>
+										</footer>
+									{/if}
 								{:else}
 									<!-- デフォルト -->
 									<section class="py-12" style="background-color: {section.backgroundColor || '#ffffff'}">
