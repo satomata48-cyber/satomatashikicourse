@@ -337,26 +337,26 @@
 									コースページ
 								</a>
 								<a
-									href="/{username}/courses/{course.slug || course.id}/edit"
+									href="/{username}/courses/{course.id}/edit"
 									class="text-sm bg-gray-100 text-gray-700 px-3 py-1 rounded hover:bg-gray-200 transition-colors"
 								>
 									コース編集
 								</a>
 								<a
-									href="/{username}/courses/{course.slug || course.id}/page-editor"
+									href="/{username}/courses/{course.id}/page-editor"
 									class="text-sm bg-purple-100 text-purple-700 px-3 py-1 rounded hover:bg-purple-200 transition-colors"
 									title="コース詳細ページのコンテンツを編集"
 								>
 									ページ編集
 								</a>
 								<a
-									href="/{username}/courses/{course.slug || course.id}/lessons"
+									href="/{username}/courses/{course.id}/lessons"
 									class="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition-colors"
 								>
 									レッスン管理
 								</a>
 								<a
-									href="/{username}/courses/{course.slug || course.id}/pricing"
+									href="/{username}/courses/{course.id}/pricing"
 									class="text-sm bg-yellow-100 text-yellow-700 px-3 py-1 rounded hover:bg-yellow-200 transition-colors"
 								>
 									料金編集

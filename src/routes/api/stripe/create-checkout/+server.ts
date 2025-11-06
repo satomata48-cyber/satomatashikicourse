@@ -12,13 +12,20 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 		}
 
 		// ユーザー認証確認
-		const supabase = createSupabaseServiceRoleClient();
-		
-		// セッションからユーザーIDを取得（実際の実装では適切な認証方法を使用）
-		// この例では簡易的にrequestからuserIdを取得
 		const authHeader = request.headers.get('authorization');
 		if (!authHeader) {
 			return json({ error: 'Authentication required' }, { status: 401 });
+		}
+
+		// Supabaseクライアントを作成してトークンを検証
+		const supabase = createSupabaseServiceRoleClient();
+		const token = authHeader.replace('Bearer ', '');
+
+		// トークンからユーザー情報を取得
+		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
+		if (authError || !user) {
+			console.error('Auth error:', authError);
+			return json({ error: 'Invalid authentication token' }, { status: 401 });
 		}
 
 		// コース情報を取得
@@ -39,11 +46,10 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			return json({ error: 'Course not found' }, { status: 404 });
 		}
 
-		// 講師本人の購入を防止（後でuserIdを適切に取得）
-		// const userId = getUserIdFromAuth(authHeader);
-		// if (course.space.instructor_id === userId) {
-		// 	return json({ error: 'Instructors cannot purchase their own courses' }, { status: 403 });
-		// }
+		// 講師本人の購入を防止
+		if (course.space.instructor_id === user.id) {
+			return json({ error: 'Instructors cannot purchase their own courses' }, { status: 403 });
+		}
 
 		// アプリケーションのベースURLを取得
 		const baseUrl = url.origin;
@@ -62,6 +68,7 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			cancel_url: `${baseUrl}/course/${courseId}`,
 			metadata: {
 				courseId,
+				studentId: user.id,
 				instructorId: course.space.instructor_id
 			},
 			allow_promotion_codes: true,

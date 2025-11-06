@@ -54,13 +54,20 @@ export async function confirmPayment(stripe: any, clientSecret: string, paymentM
 }
 
 // Stripe Checkout用の関数
-export async function createCheckoutSession(courseId: string, priceId: string) {
+export async function createCheckoutSession(courseId: string, priceId: string, accessToken?: string) {
 	try {
+		const headers: Record<string, string> = {
+			'Content-Type': 'application/json'
+		}
+
+		// 認証トークンがあれば追加
+		if (accessToken) {
+			headers['Authorization'] = `Bearer ${accessToken}`
+		}
+
 		const response = await fetch('/api/stripe/create-checkout', {
 			method: 'POST',
-			headers: {
-				'Content-Type': 'application/json'
-			},
+			headers,
 			body: JSON.stringify({
 				courseId,
 				priceId

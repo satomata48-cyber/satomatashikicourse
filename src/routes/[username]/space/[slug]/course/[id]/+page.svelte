@@ -421,7 +421,7 @@
 									<div class="text-center">
 										<p class="text-white/90 mb-4">このコースにアクセスするには購入が必要です</p>
 										<a
-											href="/{username}/space/{slug}/course/{courseId}/purchase"
+											href="/{username}/space/{slug}/course/{course.id}/purchase"
 											class="block w-full text-center bg-white text-gray-900 py-3 px-6 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
 										>
 											今すぐ購入
@@ -699,7 +699,7 @@
 									<p class="text-xl mb-8 opacity-90" style="color: {section.textColor || '#111827'}">{section.content}</p>
 									{#if section.buttonText}
 										<a
-											href={section.buttonUrl || `/${username}/space/${slug}/course/${courseId}/purchase`}
+											href={section.buttonUrl || `/${username}/space/${slug}/course/${course.id}/purchase`}
 											class="inline-block px-8 py-4 rounded-lg font-semibold text-white text-lg hover:opacity-90 transition-opacity"
 											style="background-color: {theme.primaryColor}"
 										>
@@ -840,7 +840,7 @@
 													<div class="ml-4">
 														{#if canAccess}
 															<a
-																href="/{username}/space/{slug}/course/{courseId}/lesson/{lesson.id}"
+																href="/{username}/space/{slug}/course/{course.id}/lesson/{lesson.id}"
 																class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white hover:opacity-90 transition-opacity"
 																style="background-color: {themeColor}"
 															>
@@ -892,7 +892,7 @@
 						</a>
 					{:else}
 						<a
-							href="/{username}/space/{slug}/course/{courseId}/purchase"
+							href="/{username}/space/{slug}/course/{course.id}/purchase"
 							class="inline-flex items-center bg-white text-gray-900 px-8 py-4 rounded-lg font-semibold hover:scale-105 transition-transform duration-200"
 						>
 							今すぐ購入

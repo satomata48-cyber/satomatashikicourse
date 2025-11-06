@@ -28,7 +28,8 @@
 	async function loadCourseData() {
 		try {
 			// ユーザー情報を取得
-			const { data: { user: currentUser } } = await supabase.auth.getUser()
+			const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser()
+			console.log('Purchase page - Auth check:', { currentUser, authError })
 			user = currentUser
 			
 			// コース情報を取得
@@ -83,11 +84,14 @@
 	}
 	
 	async function handlePurchase() {
+		console.log('handlePurchase called - user:', user)
 		if (!user) {
-			goto('/login')
+			console.log('No user found, redirecting to login')
+			// スペース固有のログインページにリダイレクト
+			goto(`/${username}/space/${slug}/student/login`)
 			return
 		}
-		
+
 		if (!course.stripe_price_id) {
 			error = 'この商品は現在購入できません'
 			return
@@ -95,9 +99,13 @@
 		
 		purchasing = true
 		error = ''
-		
+
 		try {
-			const { sessionUrl } = await createCheckoutSession(courseId, course.stripe_price_id)
+			// 認証トークンを取得
+			const { data: { session } } = await supabase.auth.getSession()
+			const accessToken = session?.access_token
+
+			const { sessionUrl } = await createCheckoutSession(courseId, course.stripe_price_id, accessToken)
 			
 			// Stripe Checkoutページへリダイレクト
 			window.location.href = sessionUrl

@@ -39,8 +39,13 @@
 			if (spaceError || !spaceData) {
 				throw new Error('スペースが見つかりません')
 			}
-			
+
 			space = spaceData
+			console.log('Space data loaded:', {
+				space: spaceData,
+				instructor: spaceData.instructor,
+				instructorUsername: spaceData.instructor?.username
+			})
 			
 			// 生徒がこのスペースに登録されているか確認
 			const { data: studentData, error: studentError } = await supabase
@@ -129,6 +134,14 @@
 	// 購入ページへ移動
 	function navigateToPurchase(course: any) {
 		const instructorUsername = space?.instructor?.username || username
+		console.log('navigateToPurchase called:', {
+			course,
+			space,
+			instructorUsername,
+			username,
+			slug,
+			targetUrl: `/${instructorUsername}/space/${slug}/course/${course.id}/purchase`
+		})
 		goto(`/${instructorUsername}/space/${slug}/course/${course.id}/purchase`)
 	}
 	

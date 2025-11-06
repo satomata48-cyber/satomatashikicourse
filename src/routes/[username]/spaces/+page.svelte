@@ -15,11 +15,20 @@
 	
 	$: username = $page.params.username
 	let redirecting = false
-	
+
 	// リアクティブ文でリダイレクト処理
 	$: if (username === 'undefined' && !redirecting) {
 		redirecting = true
 		handleUndefinedUsername()
+	}
+
+	// UUIDが渡された場合のリダイレクト処理
+	$: if (username && username !== 'undefined' && !redirecting) {
+		const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
+		if (isUUID) {
+			redirecting = true
+			handleUuidUsername()
+		}
 	}
 	
 	async function handleUndefinedUsername() {
@@ -32,7 +41,7 @@
 					.select('username')
 					.eq('id', user.id)
 					.single()
-				
+
 				if (profileData?.username) {
 					goto(`/${profileData.username}/spaces`)
 					return
@@ -51,10 +60,34 @@
 			goto('/login')
 		}
 	}
-	
-	// usernameが設定されたらデータをロード（シンプルな実装）
+
+	// UUIDがusernameパラメータに渡された場合の処理
+	async function handleUuidUsername() {
+		try {
+			const { data: { user } } = await supabase.auth.getUser()
+			if (user) {
+				const { data: profileData } = await supabase
+					.from('profiles')
+					.select('username')
+					.eq('id', user.id)
+					.single()
+
+				if (profileData?.username) {
+					goto(`/${profileData.username}/spaces`)
+					return
+				}
+			}
+			goto('/login')
+		} catch (err) {
+			console.error('UUID redirect error:', err)
+			goto('/login')
+		}
+	}
+
+	// usernameが設定されたらデータをロード（UUIDではない場合のみ）
 	$: if (username && username !== 'undefined' && !redirecting) {
-		if (!initialized) {
+		const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
+		if (!isUUID && !initialized) {
 			initialized = true
 			loadSpaces()
 		}

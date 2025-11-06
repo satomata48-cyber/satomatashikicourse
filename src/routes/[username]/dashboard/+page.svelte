@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
+	import { goto } from '$app/navigation'
 	import { createSupabaseBrowserClient } from '$lib/supabase'
 	
 	export let data
@@ -8,20 +9,57 @@
 	const supabase = createSupabaseBrowserClient()
 	
 	$: username = $page.params.username
-	
+
 	let stats = {
 		totalSpaces: 0,
 		totalCourses: 0,
 		totalStudents: 0,
 		totalRevenue: 0
 	}
-	
+
 	let recentActivities: any[] = []
 	let loading = true
+	let redirecting = false
+	let initialized = false
 
-	// usernameが設定されたらデータをロード
-	$: if (username) {
-		loadDashboardData()
+	// UUIDが渡された場合のリダイレクト処理
+	$: if (username && username !== 'undefined' && !redirecting) {
+		const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
+		if (isUUID) {
+			redirecting = true
+			handleUuidUsername()
+		}
+	}
+
+	async function handleUuidUsername() {
+		try {
+			const { data: { user } } = await supabase.auth.getUser()
+			if (user) {
+				const { data: profileData } = await supabase
+					.from('profiles')
+					.select('username')
+					.eq('id', user.id)
+					.single()
+
+				if (profileData?.username) {
+					goto(`/${profileData.username}/dashboard`)
+					return
+				}
+			}
+			goto('/login')
+		} catch (err) {
+			console.error('UUID redirect error:', err)
+			goto('/login')
+		}
+	}
+
+	// usernameが設定されたらデータをロード（UUIDではない場合のみ）
+	$: if (username && username !== 'undefined' && !redirecting) {
+		const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
+		if (!isUUID && !initialized) {
+			initialized = true
+			loadDashboardData()
+		}
 	}
 
 	async function loadDashboardData() {
