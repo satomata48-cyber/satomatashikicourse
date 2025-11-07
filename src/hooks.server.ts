@@ -33,7 +33,18 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if ((path === '/login' || path === '/instructor/register') && session) {
 		// 既にログイン済みならダッシュボードへ
 		if (user?.id) {
-			throw redirect(302, `/${user.id}/dashboard`)
+			// usernameを取得してリダイレクト
+			const { data: profile } = await event.locals.supabase
+				.from('profiles')
+				.select('username')
+				.eq('id', user.id)
+				.single()
+
+			if (profile?.username) {
+				throw redirect(302, `/${profile.username}/dashboard`)
+			} else {
+				throw redirect(302, '/profile/setup')
+			}
 		}
 	}
 	
