@@ -2,12 +2,8 @@
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
 	import { goto } from '$app/navigation'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	import { authStore } from '$lib/stores/auth'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
 	
 	$: username = $page.params.username
 	$: slug = $page.params.slug
@@ -42,77 +38,49 @@
 	
 	async function loadSpaceData() {
 		try {
-			// まず、usernameで講師情報を取得
-			const { data: profileData, error: profileError } = await supabase
-				.from('profiles')
-				.select('id, display_name, avatar_url, bio')
-				.eq('username', username)
-				.single()
-
-			if (profileError || !profileData) {
-				throw new Error('講師が見つかりません')
+			if (!username || !slug) {
+				throw new Error('ユーザー名またはスラッグが無効です')
 			}
 
-			// スペース情報を取得
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select('*')
-				.eq('slug', slug)
-				.eq('instructor_id', profileData.id)
-				.single()
+			// APIからスペース情報を取得
+			const response = await fetch(`/api/spaces?username=${username}&slug=${slug}`)
+			const result = await response.json()
 
-			if (spaceError) throw spaceError
-			if (!spaceData) throw new Error('スペースが見つかりません')
-			if (!spaceData.is_active) throw new Error('このスペースは現在利用できません')
-
-			// 公開制御: 講師本人または公開されている場合のみアクセス可能
-			const isInstructor = data?.user?.id === profileData.id
-			if (!isInstructor && spaceData.is_public === false) {
-				throw new Error('このページは公開されていません')
+			if (!response.ok) {
+				throw new Error(result.error || 'スペースの取得に失敗しました')
 			}
 
-			space = spaceData
-			instructor = profileData  // プロフィールデータを講師情報として使用
-
-			// 公開コース一覧を取得
-			const { data: coursesData, error: coursesError } = await supabase
-				.from('courses')
-				.select(`
-					*,
-					lessons:lessons(count)
-				`)
-				.eq('space_id', space.id)
-				.eq('is_published', true)
-				.order('created_at', { ascending: false })
-
-			if (coursesError) throw coursesError
-			courses = coursesData || []
-
-			// ランディングページコンテンツから使用されている講師プロフィールIDを収集
-			const instructorProfileIds = new Set<string>()
-			if (space.landing_page_content?.sections) {
-				for (const section of space.landing_page_content.sections) {
-					if (section.type === 'instructor' && section.instructorProfileId) {
-						instructorProfileIds.add(section.instructorProfileId)
-					}
-				}
+			if (!result.space) {
+				throw new Error('スペースが見つかりません')
 			}
 
-			// 講師プロフィールを一括取得
-			if (instructorProfileIds.size > 0) {
-				const { data: profilesData, error: profilesError } = await supabase
-					.from('instructor_profiles')
-					.select('*')
-					.in('id', Array.from(instructorProfileIds))
-					.eq('is_active', true)
-
-				if (!profilesError && profilesData) {
-					// キャッシュに格納
-					for (const profile of profilesData) {
-						instructorProfilesCache[profile.id] = profile
-					}
-				}
+			if (!result.space.is_active) {
+				throw new Error('このスペースは現在利用できません')
 			}
+
+			space = result.space
+
+			// 講師情報を取得（簡易的にスペースから取得）
+			instructor = {
+				id: space.instructor_id,
+				display_name: username,
+				avatar_url: null,
+				bio: space.description
+			}
+
+			// コース一覧を取得
+			const coursesResponse = await fetch(`/api/courses?username=${username}`)
+			const coursesResult = await coursesResponse.json()
+
+			if (coursesResponse.ok && coursesResult.courses) {
+				// このスペースの公開コースのみフィルター
+				courses = coursesResult.courses.filter((course: any) =>
+					course.space_id === space.id && course.is_published
+				)
+			}
+
+			// TODO: instructor_profiles機能は未実装
+			instructorProfilesCache = {}
 
 		} catch (err: any) {
 			error = err.message
@@ -124,41 +92,13 @@
 	
 	async function checkEnrollmentStatus() {
 		try {
-			// space_studentsテーブルから登録状況を確認
-			const { data: enrollment, error: enrollmentError } = await supabase
-				.from('space_students')
-				.select('status')
-				.eq('student_id', data.user.id)
-				.eq('space_id', space.id)
-				.single()
-			
-			if (enrollment) {
-				isEnrolled = true
-				enrollmentStatus = enrollment.status
-				
-				// 既に登録済みでアクティブな場合は、ダッシュボードに自動リダイレクト
-				// TEMPORARY DISABLE: リダイレクトループを防ぐため一時的に無効化
-				// if (enrollment.status === 'active' && !hasRedirected) {
-				// 	console.log('Redirecting enrolled student to dashboard')
-				// 	hasRedirected = true
-				// 	goto(`/${username}/space/${slug}/dashboard`)
-				// 	return
-				// }
-				
-				// profilesテーブルから生徒情報を取得
-				const { data: profileData, error: profileError } = await supabase
-					.from('profiles')
-					.select('id, display_name, email')
-					.eq('id', data.user.id)
-					.single()
-				
-				if (profileData) {
-					student = profileData
-				}
-			}
+			// TODO: 生徒登録状況チェックAPIの実装が必要
+			// 現在は常に未登録として扱う
+			isEnrolled = false
+			enrollmentStatus = null
+			student = null
 		} catch (err) {
-			// 登録されていない場合はエラーになるが、それは正常
-			console.log('Not enrolled yet:', err)
+			console.log('Check enrollment error:', err)
 		} finally {
 			checkingEnrollment = false
 		}
@@ -311,7 +251,7 @@
 														{/if}
 													</div>
 												</div>
-												<a href="/{username}/space/{slug}/course/{course.id}" class="block w-full text-center text-white py-3 rounded-lg font-medium transition-opacity hover:opacity-90 duration-200" style="background-color: {theme.primaryColor}">
+												<a href="/{username}/space/{slug}/course/{course.slug || course.id}" class="block w-full text-center text-white py-3 rounded-lg font-medium transition-opacity hover:opacity-90 duration-200" style="background-color: {theme.primaryColor}">
 													詳細を見る
 												</a>
 											</div>

@@ -1,10 +1,11 @@
 # SvelteKit オンラインコース販売プラットフォーム
 
 ## 📋 プロジェクト概要
-- **技術スタック**: SvelteKit + TypeScript + Supabase + PostgreSQL + Stripe
-- **認証**: Supabase Auth (統一認証・パスワードリセット機能付き)
+- **技術スタック**: SvelteKit + TypeScript + Cloudflare D1 + Cloudflare Pages + Stripe
+- **認証**: Cookie-based Session認証（D1データベース）
 - **決済**: Stripe Connect + Checkout Session
-- **権限管理**: RLS (Row Level Security)
+- **データベース**: Cloudflare D1 (SQLite)
+- **ホスティング**: Cloudflare Pages
 - **スタイリング**: Tailwind CSS
 - **状態管理**: Svelte stores + SvelteKit load functions
 
@@ -13,118 +14,118 @@
 ```sql
 -- 1. profiles（全ユーザー管理）
 profiles {
-  id: UUID (PK, auth.users.id参照)
-  email: TEXT
+  id: TEXT PRIMARY KEY
+  email: TEXT UNIQUE
+  password_hash: TEXT
   display_name: TEXT
   username: TEXT UNIQUE (英数字3-20文字)
   avatar_url: TEXT
   role: TEXT ('instructor' | 'student')
   bio: TEXT
-  social_links: JSONB
+  social_links: TEXT (JSON)
   -- Stripe Connect関連
   stripe_account_id: TEXT
   stripe_account_status: TEXT DEFAULT 'pending'
-  stripe_onboarding_completed: BOOLEAN DEFAULT false
-  created_at: TIMESTAMPTZ
-  updated_at: TIMESTAMPTZ
+  stripe_onboarding_completed: INTEGER DEFAULT 0
+  created_at: TEXT DEFAULT CURRENT_TIMESTAMP
+  updated_at: TEXT DEFAULT CURRENT_TIMESTAMP
 }
 
--- 2. spaces（講師のスペース）
+-- 2. sessions（セッション管理）
+sessions {
+  id: TEXT PRIMARY KEY
+  user_id: TEXT (profiles.id参照)
+  expires_at: TEXT
+  created_at: TEXT DEFAULT CURRENT_TIMESTAMP
+}
+
+-- 3. spaces（講師のスペース）
 spaces {
-  id: UUID (PK)
-  instructor_id: UUID (profiles.id参照)
+  id: TEXT PRIMARY KEY
+  instructor_id: TEXT (profiles.id参照)
   title: TEXT
   description: TEXT
   slug: TEXT
-  max_students: INT
-  is_active: BOOLEAN
-  landing_page_content: JSONB
-  created_at: TIMESTAMPTZ
-  updated_at: TIMESTAMPTZ
-  
+  max_students: INTEGER
+  is_active: INTEGER
+  landing_page_content: TEXT (JSON)
+  created_at: TEXT DEFAULT CURRENT_TIMESTAMP
+  updated_at: TEXT DEFAULT CURRENT_TIMESTAMP
+
   UNIQUE(instructor_id, slug)
 }
 
--- 3. courses（コース）
+-- 4. courses（コース）
 courses {
-  id: UUID (PK)
-  space_id: UUID (spaces.id参照)
+  id: TEXT PRIMARY KEY
+  space_id: TEXT (spaces.id参照)
   title: TEXT
   description: TEXT
-  price: DECIMAL
+  price: REAL
   currency: TEXT
-  is_free: BOOLEAN
-  is_published: BOOLEAN
+  is_free: INTEGER
+  is_published: INTEGER
   thumbnail_url: TEXT
+  course_page_content: TEXT (JSON)
   -- Stripe商品情報
   stripe_product_id: TEXT
   stripe_price_id: TEXT
   stripe_payment_link: TEXT
-  created_at: TIMESTAMPTZ
-  updated_at: TIMESTAMPTZ
+  created_at: TEXT DEFAULT CURRENT_TIMESTAMP
+  updated_at: TEXT DEFAULT CURRENT_TIMESTAMP
 }
 
--- 4. lessons（レッスン）
+-- 5. lessons（レッスン）
 lessons {
-  id: UUID (PK)
-  course_id: UUID (courses.id参照)
+  id: TEXT PRIMARY KEY
+  course_id: TEXT (courses.id参照)
   title: TEXT
   description: TEXT
   content: TEXT
   video_url: TEXT
-  video_type: TEXT ('youtube', 'supabase', 'external')
-  duration: INT
-  order_index: INT
-  is_published: BOOLEAN
-  created_at: TIMESTAMPTZ
-  updated_at: TIMESTAMPTZ
+  video_type: TEXT ('youtube', 'external')
+  duration: INTEGER
+  order_index: INTEGER
+  is_published: INTEGER
+  created_at: TEXT DEFAULT CURRENT_TIMESTAMP
+  updated_at: TEXT DEFAULT CURRENT_TIMESTAMP
 }
 
--- 5. space_students（生徒登録）
+-- 6. space_students（生徒登録）
 space_students {
-  id: UUID (PK)
-  space_id: UUID (spaces.id参照)
-  student_id: UUID (profiles.id参照)
+  id: TEXT PRIMARY KEY
+  space_id: TEXT (spaces.id参照)
+  student_id: TEXT (profiles.id参照)
   status: TEXT ('active' | 'inactive' | 'suspended')
-  enrolled_at: TIMESTAMPTZ
-  
+  enrolled_at: TEXT DEFAULT CURRENT_TIMESTAMP
+
   UNIQUE(space_id, student_id)
 }
 
--- 6. course_purchases（購入記録）
+-- 7. course_purchases（購入記録）
 course_purchases {
-  id: UUID (PK)
-  course_id: UUID (courses.id参照)
-  student_id: UUID (profiles.id参照)
-  amount: DECIMAL
+  id: TEXT PRIMARY KEY
+  course_id: TEXT (courses.id参照)
+  student_id: TEXT (profiles.id参照)
+  amount: REAL
   currency: TEXT
   status: TEXT ('pending' | 'completed' | 'failed' | 'refunded')
   stripe_session_id: TEXT
   stripe_payment_intent_id: TEXT
-  purchased_at: TIMESTAMPTZ
-  
+  purchased_at: TEXT DEFAULT CURRENT_TIMESTAMP
+
   UNIQUE(course_id, student_id)
 }
 
--- 7. lesson_completions（レッスン完了トラッキング）
+-- 8. lesson_completions（レッスン完了トラッキング）
 lesson_completions {
-  id: UUID (PK)
-  lesson_id: UUID (lessons.id参照)
-  student_id: UUID (profiles.id参照)
-  completed_at: TIMESTAMPTZ DEFAULT NOW()
-  created_at: TIMESTAMPTZ DEFAULT NOW()
-  
-  UNIQUE(lesson_id, student_id)
-}
+  id: TEXT PRIMARY KEY
+  lesson_id: TEXT (lessons.id参照)
+  student_id: TEXT (profiles.id参照)
+  completed_at: TEXT DEFAULT CURRENT_TIMESTAMP
+  created_at: TEXT DEFAULT CURRENT_TIMESTAMP
 
--- 8. stripe_webhook_events（Webhookイベントログ）
-stripe_webhook_events {
-  id: UUID (PK)
-  stripe_event_id: TEXT UNIQUE NOT NULL
-  event_type: TEXT NOT NULL
-  data: JSONB
-  processed: BOOLEAN DEFAULT false
-  created_at: TIMESTAMPTZ DEFAULT NOW()
+  UNIQUE(lesson_id, student_id)
 }
 ```
 
@@ -135,13 +136,14 @@ src/routes/
 ├── +page.svelte                              # トップページ
 ├── login/+page.svelte                        # ログイン
 ├── logout/+page.svelte                       # ログアウト
-├── forgot-password/+page.svelte              # パスワードリセット申請
-├── reset-password/+page.svelte               # パスワード再設定
-├── profile/setup/+page.svelte                # プロフィール設定
-├── instructor/register/+page.svelte          # 講師登録
-├── purchase/success/+page.svelte             # 購入成功ページ
 │
 ├── api/                                      # APIエンドポイント
+│   ├── auth/
+│   │   ├── login/+server.ts                  # ログイン処理
+│   │   ├── register/+server.ts               # 新規登録
+│   │   └── logout/+server.ts                 # ログアウト
+│   ├── spaces/+server.ts                     # スペースCRUD
+│   ├── courses/+server.ts                    # コースCRUD
 │   └── stripe/
 │       ├── create-product/+server.ts         # Stripe商品作成
 │       ├── create-checkout/+server.ts        # チェックアウトセッション作成
@@ -150,136 +152,115 @@ src/routes/
 ├── [username]/                               # 講師管理画面
 │   ├── dashboard/+page.svelte                # ダッシュボード
 │   ├── spaces/
-│   │   ├── +page.svelte                      # スペース一覧（削除機能付き）
+│   │   ├── +page.svelte                      # スペース一覧
 │   │   ├── create/+page.svelte               # スペース作成
 │   │   └── [slug]/
 │   │       ├── +page.svelte                  # スペース詳細
 │   │       ├── edit/+page.svelte             # スペース編集
 │   │       ├── page-editor/+page.svelte      # ランディングページ編集
 │   │       └── students/+page.svelte         # 生徒管理
-│   └── courses/
-│       ├── +page.svelte                      # コース一覧
-│       ├── create/+page.svelte               # コース作成
-│       └── [id]/
-│           ├── edit/+page.svelte             # コース編集（権限チェック付き）
-│           ├── pricing/+page.svelte          # 料金・Stripe設定
-│           └── lessons/+page.svelte          # レッスン管理
+│   ├── courses/
+│   │   ├── +page.svelte                      # コース一覧
+│   │   ├── create/+page.svelte               # コース作成
+│   │   └── [id]/
+│   │       ├── edit/+page.svelte             # コース編集
+│   │       ├── pricing/+page.svelte          # 料金・Stripe設定
+│   │       └── lessons/+page.svelte          # レッスン管理
+│   └── student-pages/+page.svelte            # 生徒ページ管理
 │
 └── [username]/space/[slug]/                  # 公開・生徒エリア
     ├── +page.svelte                          # スペースランディングページ
-    ├── enroll/+page.svelte                   # 生徒登録
-    ├── student/                              # 生徒認証エリア
-    │   ├── +page.svelte                      # 生徒ダッシュボード
-    │   ├── courses/+page.svelte              # コース一覧（購入ステータス・フィルター付き）
-    │   └── course/[id]/+page.svelte          # レッスン視聴・完了トラッキング
-    └── course/[id]/
-        ├── +page.svelte                      # コース詳細（公開）
-        └── purchase/+page.svelte             # Stripe購入ページ
+    └── ...                                   # 生徒向けページ（実装中）
 ```
 
 ## 🎓 主要機能
 
 ### ✅ 認証・アカウント機能
-- **パスワードリセット**: メール経由でのパスワード再設定
+- **Cookie-based認証**: セッションベースの安全な認証
 - **ロール管理**: 講師・生徒の明確な権限分離
 - **プロフィール管理**: username ベースのURL構造
 
 ### ✅ 講師機能
-- **スペース管理**: 
-  - 作成・編集・削除（カスケード削除対応）
+- **スペース管理**:
+  - 作成・編集・削除
   - ランディングページカスタマイズ
-- **コース管理**: 
+  - テーマカラー設定
+- **コース管理**:
   - 作成・編集・削除
   - 価格設定・Stripe商品連携
   - 公開/非公開管理
-- **レッスン管理**: 
+- **レッスン管理**:
   - 動画アップロード（YouTube対応）
   - コンテンツ作成・順序管理
-- **生徒管理**: 登録生徒一覧・ステータス管理
+  - ドラッグ&ドロップで並び替え
 - **ダッシュボード**: 売上・統計・活動概要
 
-### ✅ 生徒機能
-- **コース閲覧・購入**: 
-  - コース一覧フィルター（全て/購入済み/無料/未購入）
-  - Stripeチェックアウトフロー
-  - 購入済みステータス表示
-- **学習機能**: 
-  - 2カラム学習ページ（左:レッスン一覧、右:動画・内容）
-  - レッスン完了トラッキング
-  - 進捗管理（チェックマーク・完了率）
-  - 復習機能（完了後も視聴可能）
-
-### ✅ 決済機能（Stripe）
-- **Stripe Connect**: 講師アカウント連携
-- **商品管理**: 自動商品・価格作成
-- **チェックアウト**: セキュアな決済フロー
-- **Webhook処理**: 
-  - 決済完了通知
-  - 購入ステータス自動更新
-- **セキュリティ**: 
-  - 講師自身のコース購入防止
-  - 生徒認証チェック
+### 🚧 実装中の機能
+- 生徒管理
+- コース購入・視聴
+- 進捗トラッキング
+- Stripe決済統合
 
 ## 🔐 セキュリティ・権限管理
 
-### RLSポリシー実装
-- **profiles**: 
-  - 全員閲覧可、自分のみ更新
-  - Stripe情報は本人のみ更新可
-- **spaces**: アクティブなら全員閲覧、所有者のみ更新
-- **courses/lessons**: 
-  - 公開なら閲覧可、所有者のみ更新
-  - Stripe設定は講師のみ
-- **course_purchases**: 関係者のみアクセス
-- **stripe_webhook_events**: サービスロールのみ
+### セッション管理
+- Cookie-based認証
+- セッション有効期限管理
+- CSRF保護
 
-### 権限チェック実装箇所
-- コース編集: `supabase.auth.getUser()`による所有者確認
-- 購入フロー: 講師/生徒ロール確認
-- 削除操作: カスケード削除対応
+### APIエンドポイント保護
+- ログイン状態チェック
+- 所有者確認（コース・スペース編集時）
+- ロールベースアクセス制御
 
 ## 🚀 セットアップ手順
 
 ### 1. 環境変数設定
 ```env
-PUBLIC_SUPABASE_URL=your_supabase_url
-PUBLIC_SUPABASE_ANON_KEY=your_anon_key
+# Stripe
 STRIPE_SECRET_KEY=your_stripe_secret_key
 STRIPE_WEBHOOK_SECRET=your_webhook_secret
+PUBLIC_STRIPE_PUBLISHABLE_KEY=your_publishable_key
 ```
 
-### 2. Supabaseデータベース設定
+### 2. Cloudflare D1データベース設定
 ```bash
-# SQLファイルを実行
-add_stripe_fields_final.sql  # Stripe統合フィールド追加
-cascade_delete.sql           # カスケード削除設定
+# D1データベース作成
+npx wrangler d1 create satomatashiki-course-db
+
+# マイグレーション実行
+npx wrangler d1 execute satomatashiki-course-db --local --file=migrations/0001_initial_schema.sql
+npx wrangler d1 execute satomatashiki-course-db --local --file=migrations/0002_add_password_hash.sql
+npx wrangler d1 execute satomatashiki-course-db --local --file=migrations/0003_add_course_page_content.sql
 ```
 
-### 3. Stripe設定
-- Stripe Connectアカウント作成
-- Webhook エンドポイント設定: `/api/stripe/webhook`
-- イベント設定: `checkout.session.completed`
-
-### 4. 開発サーバー起動
+### 3. ローカル開発サーバー起動
 ```bash
 npm install
 npm run dev
 ```
 
+### 4. デプロイ
+```bash
+npm run deploy
+```
+
 ## 📈 技術的特徴
 
+### Cloudflare D1統合
+- **サーバーレスSQL**: SQLiteベースの分散データベース
+- **D1 Managerクラス**: ProfileManager, SpaceManager, CourseManager
+- **REST API**: `/api/*`エンドポイント経由でD1にアクセス
+
 ### パフォーマンス最適化
-- **楽観的更新**: UI即座反映
-- **インデックス最適化**: 
-  - `idx_courses_stripe_product`
-  - `idx_profiles_stripe_account`
-  - `idx_stripe_events_processed`
+- **エッジコンピューティング**: Cloudflare Pagesで全世界に配信
 - **リアクティブ状態管理**: Svelte stores活用
+- **SSR/CSR混在**: 最適なレンダリング戦略
 
 ### エラーハンドリング
 - 詳細なエラーログ出力
 - ユーザーフレンドリーなエラーメッセージ
-- 権限エラーの適切な処理
+- 適切なHTTPステータスコード
 
 ### ユーザビリティ
 - **username URL**: `/{username}/dashboard`
@@ -289,18 +270,17 @@ npm run dev
 
 ## 🎉 実装済み機能
 
-**完全に動作するオンラインコース販売プラットフォーム**
+**Cloudflare D1ベースのオンラインコース販売プラットフォーム**
 
-✅ **認証システム**: ログイン・パスワードリセット・ロール管理  
-✅ **講師機能**: コンテンツ作成・管理・販売・生徒管理  
-✅ **生徒機能**: コース購入・学習・進捗トラッキング  
-✅ **決済システム**: Stripe完全統合・セキュアな購入フロー  
-✅ **セキュリティ**: RLS・権限管理・エラーハンドリング
+✅ **認証システム**: Cookie-based認証・セッション管理
+✅ **講師機能**: スペース・コース・レッスン管理
+✅ **ランディングページ**: ドラッグ&ドロップエディター
+✅ **データベース**: Cloudflare D1完全移行
+✅ **デプロイ**: Cloudflare Pages対応
 
 **最新の更新**:
-- パスワードリセット機能追加
-- コース削除のカスケード対応
-- 権限エラー修正（`auth.getUser()`使用）
-- Stripe決済完全統合
-- 購入ステータストラッキング
-- コース一覧フィルタリング機能
+- Cloudflare D1への完全移行完了
+- Supabase完全削除
+- Cookie-based認証実装
+- REST APIエンドポイント実装
+- SSRエラー修正（fetch呼び出しをonMount内に移動）

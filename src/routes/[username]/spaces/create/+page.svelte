@@ -1,49 +1,11 @@
 <script lang="ts">
 	import { goto } from '$app/navigation'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
 	import { onMount } from 'svelte'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
-	let userId: string | null = null
-	let redirecting = false
-	
-	// リアクティブ文でリダイレクト処理
-	$: if (username === 'undefined' && !redirecting) {
-		redirecting = true
-		handleUndefinedUsername()
-	}
-	
-	async function handleUndefinedUsername() {
-		try {
-			const { data: { user } } = await supabase.auth.getUser()
-			if (user) {
-				const { data: profileData } = await supabase
-					.from('profiles')
-					.select('username')
-					.eq('id', user.id)
-					.single()
-				
-				if (profileData?.username) {
-					goto(`/${profileData.username}/spaces/create`)
-					return
-				} else {
-					goto('/profile/setup')
-					return
-				}
-			} else {
-				goto('/login')
-				return
-			}
-		} catch (err) {
-			console.error('Redirect error:', err)
-			goto('/login')
-		}
-	}
 	
 	let formData = {
 		title: '',
@@ -91,40 +53,12 @@
 			slugError = 'スラッグは必須です'
 			return false
 		}
-		
+
 		if (!/^[a-zA-Z0-9_-]+$/.test(formData.slug)) {
 			slugError = 'スラッグは英数字、アンダースコア、ハイフンのみ使用可能です'
 			return false
 		}
-		
-		// ユーザーIDを取得
-		if (!userId) {
-			const { data: profileData, error: profileError } = await supabase
-				.from('profiles')
-				.select('id')
-				.eq('username', username)
-				.single()
-			
-			if (profileError || !profileData) {
-				slugError = 'ユーザーが見つかりません'
-				return false
-			}
-			userId = profileData.id
-		}
-		
-		// 重複チェック
-		const { data: existingSpace } = await supabase
-			.from('spaces')
-			.select('id')
-			.eq('instructor_id', userId)
-			.eq('slug', formData.slug)
-			.single()
-		
-		if (existingSpace) {
-			slugError = 'このスラッグは既に使用されています'
-			return false
-		}
-		
+
 		slugError = ''
 		return true
 	}
@@ -132,24 +66,25 @@
 	async function handleSubmit() {
 		loading = true
 		error = ''
-		
+
 		try {
 			const isValidSlug = await validateSlug()
 			if (!isValidSlug) {
 				loading = false
 				return
 			}
-			
-			const { data: space, error: createError } = await supabase
-				.from('spaces')
-				.insert({
-					instructor_id: userId,
+
+			const response = await fetch('/api/spaces', {
+				method: 'POST',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
 					title: formData.title,
 					description: formData.description,
 					slug: formData.slug,
 					max_students: formData.maxStudents,
-					is_public: true,  // デフォルトで公開
-					is_active: true,    // デフォルトでアクティブ
+					is_active: true,
 					landing_page_content: {
 						title: formData.title,
 						description: formData.description,
@@ -249,12 +184,15 @@
 						]
 					}
 				})
-				.select()
-				.single()
-			
-			if (createError) throw createError
-			
-			goto(`/${username}/spaces/${space.slug}`)
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'スペースの作成に失敗しました')
+			}
+
+			goto(`/${username}/spaces/${result.space.slug}`)
 		} catch (err: any) {
 			error = err.message
 			console.error('Space creation error:', err)

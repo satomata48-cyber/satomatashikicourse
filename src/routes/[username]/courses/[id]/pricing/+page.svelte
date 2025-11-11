@@ -2,16 +2,14 @@
 	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: courseId = $page.params.id
-	
+
 	let course: any = null
+	let space: any = null
 	let priceFormData = {
 		isFree: false,
 		price: 0,
@@ -21,63 +19,40 @@
 	let saving = false
 	let error = ''
 	let successMessage = ''
-	
+
 	// Stripe設定
 	let stripeConnected = false
 	let stripeProductId = ''
 	let stripePriceId = ''
 	let showStripeSetup = false
-	
+
 	onMount(async () => {
 		await loadCourse()
 	})
-	
+
 	async function loadCourse() {
 		try {
-			// 現在のユーザーを取得
-			const { data: { user } } = await supabase.auth.getUser()
-			
-			if (!user) {
-				error = 'ログインが必要です'
-				goto('/login')
-				return
+			// APIからコース情報を取得
+			const response = await fetch(`/api/courses?id=${courseId}`)
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'コースの取得に失敗しました')
 			}
-			
-			const { data: courseData, error: courseError } = await supabase
-				.from('courses')
-				.select(`
-					*,
-					space:spaces!inner(instructor_id, title, slug)
-				`)
-				.eq('id', courseId)
-				.single()
-			
-			if (courseError) throw courseError
-			if (!courseData) throw new Error('コースが見つかりません')
-			
-			// 講師の権限チェック
-			if (courseData.space.instructor_id !== user.id) {
-				error = 'このコースの料金を編集する権限がありません'
-				setTimeout(() => {
-					goto(`/${username}/courses`)
-				}, 2000)
-				return
-			}
-			
-			course = courseData
+
+			course = result.course
+			space = result.space
+
 			priceFormData = {
-				isFree: course.is_free,
+				isFree: course.is_free ? true : false,
 				price: course.price || 0,
 				currency: course.currency || 'JPY'
 			}
-			
+
 			// Stripe設定を確認
 			stripeProductId = course.stripe_product_id || ''
 			stripePriceId = course.stripe_price_id || ''
 			stripeConnected = !!(stripeProductId && stripePriceId)
-			
-			// 講師のStripeアカウント接続状態を確認
-			await checkStripeConnection(user.id)
 		} catch (err: any) {
 			error = err.message
 			console.error('Load course error:', err)
@@ -90,25 +65,28 @@
 		saving = true
 		error = ''
 		successMessage = ''
-		
+
 		try {
-			const updateData = {
-				is_free: priceFormData.isFree,
-				price: priceFormData.isFree ? 0 : priceFormData.price,
-				currency: priceFormData.currency,
-				updated_at: new Date().toISOString()
+			const response = await fetch('/api/courses', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id: courseId,
+					is_free: priceFormData.isFree,
+					price: priceFormData.isFree ? 0 : priceFormData.price,
+					currency: priceFormData.currency
+				})
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '保存に失敗しました')
 			}
-			
-			const { error: updateError } = await supabase
-				.from('courses')
-				.update(updateData)
-				.eq('id', courseId)
-			
-			if (updateError) throw updateError
-			
+
 			successMessage = '料金設定を更新しました'
 			await loadCourse() // 最新データを再読み込み
-			
+
 			// 2秒後にコース一覧に戻る
 			setTimeout(() => {
 				goto(`/${username}/courses`)
@@ -120,42 +98,24 @@
 			saving = false
 		}
 	}
-	
+
 	function formatCurrency(price: number): string {
 		return new Intl.NumberFormat('ja-JP', {
 			style: 'currency',
 			currency: priceFormData.currency
 		}).format(price)
 	}
-	
+
 	function handleCancel() {
 		goto(`/${username}/courses`)
 	}
-	
-	async function checkStripeConnection(userId: string) {
-		try {
-			const { data: profileData } = await supabase
-				.from('profiles')
-				.select('stripe_account_id, stripe_account_status')
-				.eq('id', userId)
-				.single()
-			
-			if (profileData?.stripe_account_id) {
-				// Stripeアカウントが接続されているかチェック
-				// 実際の実装では、サーバーサイドでStripe APIを呼び出して確認
-				console.log('Stripe account connected:', profileData.stripe_account_id)
-			}
-		} catch (err) {
-			console.error('Stripe connection check error:', err)
-		}
-	}
-	
+
 	async function setupStripeProduct() {
 		if (!course || priceFormData.isFree) return
-		
+
 		saving = true
 		error = ''
-		
+
 		try {
 			const response = await fetch('/api/stripe/create-product', {
 				method: 'POST',
@@ -170,22 +130,22 @@
 					currency: priceFormData.currency
 				})
 			})
-			
+
 			if (!response.ok) {
 				const errorData = await response.json()
 				throw new Error(errorData.error || 'Stripe商品の作成に失敗しました')
 			}
-			
+
 			const { productId, priceId, paymentLink } = await response.json()
-			
+
 			// UIを更新
 			stripeProductId = productId
 			stripePriceId = priceId
 			stripeConnected = true
 			showStripeSetup = false
-			
+
 			successMessage = 'Stripe決済が設定されました！'
-			
+
 			// コース情報を再読み込み
 			await loadCourse()
 		} catch (err: any) {
@@ -194,25 +154,31 @@
 			saving = false
 		}
 	}
-	
+
 	async function disconnectStripe() {
 		if (!confirm('Stripe決済を無効にしますか？購入ができなくなります。')) return
-		
+
 		try {
-			const { error: updateError } = await supabase
-				.from('courses')
-				.update({
+			const response = await fetch('/api/courses', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id: courseId,
 					stripe_product_id: null,
 					stripe_price_id: null
 				})
-				.eq('id', courseId)
-			
-			if (updateError) throw updateError
-			
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '無効化に失敗しました')
+			}
+
 			stripeProductId = ''
 			stripePriceId = ''
 			stripeConnected = false
-			
+
 			successMessage = 'Stripe決済が無効化されました'
 		} catch (err: any) {
 			error = `無効化エラー: ${err.message}`
@@ -237,7 +203,7 @@
 					<div>
 						<h2 class="text-2xl font-bold text-gray-900 mb-2">料金設定</h2>
 						<p class="text-gray-600">コース: {course.title}</p>
-						<p class="text-sm text-gray-500">スペース: {course.space.title}</p>
+						<p class="text-sm text-gray-500">スペース: {space?.title || ''}</p>
 					</div>
 					<a
 						href="/{username}/courses"

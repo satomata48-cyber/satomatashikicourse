@@ -1,78 +1,33 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: slug = $page.params.slug
-	
+
 	let space: any = null
 	let student: any = null
 	let profile: any = null
 	let loading = true
 	let error = ''
 	let success = ''
-	
+
 	// 編集モード
 	let editing = false
 	let displayName = ''
 	let email = ''
 	let bio = ''
-	
+
 	onMount(async () => {
 		await loadProfileData()
 	})
-	
+
 	async function loadProfileData() {
 		try {
-			// まずスペース情報をslugから取得
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select(`
-					*,
-					instructor:profiles!instructor_id(username, display_name)
-				`)
-				.eq('slug', slug)
-				.single()
-			
-			if (spaceError || !spaceData) {
-				throw new Error('スペースが見つかりません')
-			}
-			
-			space = spaceData
-			
-			// 生徒がこのスペースに登録されているか確認
-			const { data: studentData, error: studentError } = await supabase
-				.from('space_students')
-				.select('*')
-				.eq('student_id', data.user.id)
-				.eq('space_id', space.id)
-				.single()
-			
-			if (studentError || !studentData) {
-				throw new Error('このスペースに登録されていません')
-			}
-			
-			student = studentData
-			
-			// プロフィール情報を取得
-			const { data: profileInfo, error: profileInfoError } = await supabase
-				.from('profiles')
-				.select('*')
-				.eq('id', data.user.id)
-				.single()
-			
-			if (profileInfoError) throw profileInfoError
-			
-			profile = profileInfo
-			displayName = profile.display_name || ''
-			email = profile.email || ''
-			bio = profile.bio || ''
-			
+			// TODO: D1実装が必要 - スペース情報、生徒登録、プロフィール情報の取得
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			error = err.message
 			console.error('Load profile data error:', err)
@@ -80,46 +35,27 @@
 			loading = false
 		}
 	}
-	
+
 	function startEdit() {
 		editing = true
 		displayName = profile.display_name || ''
 		bio = profile.bio || ''
 	}
-	
+
 	function cancelEdit() {
 		editing = false
 		displayName = profile.display_name || ''
 		bio = profile.bio || ''
 		error = ''
 	}
-	
+
 	async function saveProfile() {
 		try {
 			error = ''
 			success = ''
-			
-			const { error: updateError } = await supabase
-				.from('profiles')
-				.update({
-					display_name: displayName,
-					bio: bio
-				})
-				.eq('id', data.user.id)
-			
-			if (updateError) throw updateError
-			
-			// プロフィールを再読み込み
-			await loadProfileData()
-			
-			editing = false
-			success = 'プロフィールを更新しました'
-			
-			// 3秒後にメッセージを消す
-			setTimeout(() => {
-				success = ''
-			}, 3000)
-			
+
+			// TODO: D1実装が必要 - プロフィール更新
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			error = err.message || 'プロフィールの更新に失敗しました'
 		}
@@ -169,7 +105,10 @@
 		</div>
 	{:else if error && !editing}
 		<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-			{error}
+			<p>{error}</p>
+			<a href="/{username}/space/{slug}/student" class="text-sm underline mt-2 inline-block">
+				ダッシュボードに戻る
+			</a>
 		</div>
 	{:else if profile}
 		<div class="bg-white rounded-lg shadow">

@@ -1,18 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	onMount(async () => {
 		// ログアウト処理
-		const { error } = await supabase.auth.signOut()
-		
-		if (error) {
+		try {
+			await fetch('/api/auth/logout', {
+				method: 'POST'
+			})
+		} catch (error) {
 			console.error('Logout error:', error)
 		}
-		
+
 		// ログインページにリダイレクト
 		goto('/login')
 	})

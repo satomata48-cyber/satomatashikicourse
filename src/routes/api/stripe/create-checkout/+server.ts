@@ -1,7 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { stripe } from '$lib/stripe-server';
-import { createSupabaseServiceRoleClient } from '$lib/supabase-server';
 
 export const POST: RequestHandler = async ({ request, locals, url }) => {
 	try {
@@ -17,34 +16,20 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 			return json({ error: 'Authentication required' }, { status: 401 });
 		}
 
-		// Supabaseクライアントを作成してトークンを検証
-		const supabase = createSupabaseServiceRoleClient();
+		// TODO: D1実装が必要 - トークン検証とコース情報取得
+		// 現在はスタブ実装
 		const token = authHeader.replace('Bearer ', '');
 
-		// トークンからユーザー情報を取得
-		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
-		if (authError || !user) {
-			console.error('Auth error:', authError);
-			return json({ error: 'Invalid authentication token' }, { status: 401 });
-		}
-
-		// コース情報を取得
-		const { data: course, error: courseError } = await supabase
-			.from('courses')
-			.select(`
-				*,
-				space:spaces!inner(
-					instructor_id,
-					title,
-					slug
-				)
-			`)
-			.eq('id', courseId)
-			.single();
-
-		if (courseError || !course) {
-			return json({ error: 'Course not found' }, { status: 404 });
-		}
+		// 仮のユーザー情報とコース情報
+		const user = { id: 'stub-user-id' };
+		const course = {
+			id: courseId,
+			space: {
+				instructor_id: 'stub-instructor-id',
+				title: 'Sample Space',
+				slug: 'sample-space'
+			}
+		};
 
 		// 講師本人の購入を防止
 		if (course.space.instructor_id === user.id) {

@@ -1,10 +1,7 @@
 <script lang="ts">
-	import { createSupabaseBrowserClient } from '$lib/supabase';
 	import type { PageData } from './$types';
 
 	export let data: PageData;
-	
-	const supabase = createSupabaseBrowserClient();
 
 	let email = '';
 	let loading = false;
@@ -17,13 +14,8 @@
 		error = '';
 
 		try {
-			const { error: resetError } = await supabase.auth.resetPasswordForEmail(email, {
-				redirectTo: `${window.location.origin}/reset-password`
-			});
-
-			if (resetError) throw resetError;
-
-			message = 'パスワードリセットのメールを送信しました。メールをご確認ください。';
+			// TODO: D1実装が必要 - パスワードリセット機能
+			error = 'この機能は現在実装中です。D1データベースへの移行が必要です。';
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'エラーが発生しました';
 		} finally {

@@ -1,21 +1,19 @@
-import { SupabaseClient, Session } from '@supabase/supabase-js'
-import { Database } from './types/supabase'
+import type { D1Database } from '@cloudflare/workers-types';
 
 declare global {
 	namespace App {
 		interface Locals {
-			supabase: SupabaseClient<Database>
-			safeGetSession: () => Promise<{ session: Session | null; user: User | null }>
-			session: Session | null
-			user: User | null
-			role: 'instructor' | 'student' | 'admin' | null
+			user: any | null;
+			session: { token: string; expires_at: number } | null;
 		}
 		interface PageData {
-			session: Session | null
-			user: User | null
+			user: any | null;
 		}
-		// interface Error {}
-		// interface Platform {}
+		interface Platform {
+			env?: {
+				DB?: D1Database;
+			};
+		}
 	}
 }
 

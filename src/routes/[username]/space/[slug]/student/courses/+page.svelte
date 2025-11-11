@@ -2,15 +2,12 @@
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
 	import { goto } from '$app/navigation'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: slug = $page.params.slug
-	
+
 	let space: any = null
 	let student: any = null
 	let courses: any[] = []
@@ -19,84 +16,15 @@
 	let loading = true
 	let error = ''
 	let filter = 'all' // 'all', 'free', 'paid', 'purchased', 'unpurchased'
-	
+
 	onMount(async () => {
 		await loadCoursesData()
 	})
-	
+
 	async function loadCoursesData() {
 		try {
-			// まずスペース情報をslugから取得
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select(`
-					*,
-					instructor:profiles!instructor_id(username, display_name)
-				`)
-				.eq('slug', slug)
-				.single()
-			
-			if (spaceError || !spaceData) {
-				throw new Error('スペースが見つかりません')
-			}
-
-			space = spaceData
-			console.log('Space data loaded:', {
-				space: spaceData,
-				instructor: spaceData.instructor,
-				instructorUsername: spaceData.instructor?.username
-			})
-			
-			// 生徒がこのスペースに登録されているか確認
-			const { data: studentData, error: studentError } = await supabase
-				.from('space_students')
-				.select('*')
-				.eq('student_id', data.user.id)
-				.eq('space_id', space.id)
-				.single()
-			
-			if (studentError || !studentData) {
-				throw new Error('このスペースに登録されていません')
-			}
-			
-			student = studentData
-			
-			// このスペースのコースを取得（進捗情報も含む）
-			console.log('About to query courses for space:', space.id)
-			
-			// まず、すべてのコースをデバッグ用に取得
-			const { data: allCoursesData } = await supabase
-				.from('courses')
-				.select('id, title, is_published, space_id, slug')
-				.eq('space_id', space.id)
-			
-			console.log('All courses in this space:', allCoursesData)
-			
-			console.log('Testing with different query approach...')
-			
-			const { data: coursesData, error: coursesError } = await supabase
-				.from('courses')
-				.select('*')
-				.eq('space_id', space.id)
-				.eq('is_published', true)
-				.order('created_at', { ascending: false })
-			
-			if (coursesError) {
-				console.error('Courses error:', coursesError)
-				throw coursesError
-			}
-			
-			console.log('Raw courses data:', coursesData)
-			console.log('Space ID being used:', space.id)
-			console.log('Space slug:', slug)
-			
-			courses = coursesData || []
-			
-			console.log('Filtered courses data:', courses)
-			
-			// 購入済みコースを取得
-			await loadPurchasedCourses()
-			
+			// TODO: D1実装が必要 - コースデータの取得
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			error = err.message || 'データの読み込みに失敗しました'
 			console.error('Load courses data error:', err)
@@ -104,21 +32,11 @@
 			loading = false
 		}
 	}
-	
+
 	async function loadPurchasedCourses() {
 		try {
-			const { data: purchases, error: purchaseError } = await supabase
-				.from('course_purchases')
-				.select('course_id')
-				.eq('student_id', data.user.id)
-				.eq('status', 'completed')
-			
-			if (purchaseError) {
-				console.error('Purchase data error:', purchaseError)
-				return
-			}
-			
-			purchasedCourses = new Set(purchases?.map(p => p.course_id) || [])
+			// TODO: D1実装が必要 - 購入済みコースの取得
+			purchasedCourses = new Set()
 		} catch (err) {
 			console.error('Load purchased courses error:', err)
 		}
@@ -128,21 +46,24 @@
 	function navigateToCourse(course: any) {
 		// URLのusernameを正しく設定
 		const instructorUsername = space?.instructor?.username || username
-		goto(`/${instructorUsername}/space/${slug}/student/course/${course.id}`)
+		const courseSlug = course.slug || course.id
+		goto(`/${instructorUsername}/space/${slug}/student/course/${courseSlug}`)
 	}
-	
+
 	// 購入ページへ移動
 	function navigateToPurchase(course: any) {
 		const instructorUsername = space?.instructor?.username || username
+		const courseSlug = course.slug || course.id
 		console.log('navigateToPurchase called:', {
 			course,
 			space,
 			instructorUsername,
 			username,
 			slug,
-			targetUrl: `/${instructorUsername}/space/${slug}/course/${course.id}/purchase`
+			courseSlug,
+			targetUrl: `/${instructorUsername}/space/${slug}/course/${courseSlug}/purchase`
 		})
-		goto(`/${instructorUsername}/space/${slug}/course/${course.id}/purchase`)
+		goto(`/${instructorUsername}/space/${slug}/course/${courseSlug}/purchase`)
 	}
 	
 	// コースの購入状況を確認
@@ -238,7 +159,10 @@
 		</div>
 	{:else if error}
 		<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-			{error}
+			<p>{error}</p>
+			<a href="/{username}/space/{slug}/student" class="text-sm underline mt-2 inline-block">
+				ダッシュボードに戻る
+			</a>
 		</div>
 	{:else if courses.length === 0}
 		<div class="text-center py-12">

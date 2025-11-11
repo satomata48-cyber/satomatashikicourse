@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/stores'
 	import { goto } from '$app/navigation'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
 	import InstructorSidebar from '$lib/components/InstructorSidebar.svelte'
 
 	export let data
 
-	const supabase = createSupabaseBrowserClient()
+	// TODO: D1実装が必要
 
 	let username: string
 	let currentPath: string

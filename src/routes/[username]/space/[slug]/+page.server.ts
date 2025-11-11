@@ -1,13 +1,9 @@
 import type { PageServerLoad } from './$types'
-import { createSupabaseServerClient } from '$lib/supabase'
 
 export const load: PageServerLoad = async (event) => {
-	const supabase = createSupabaseServerClient(event)
-	
-	// ユーザー情報を取得（ログインしていない場合でもエラーにしない）
-	const { data: { user } } = await supabase.auth.getUser()
-	
+	// TODO: D1実装が必要 - ユーザー認証情報の取得
+
 	return {
-		user: user || null
+		user: null // スタブ: 現在はユーザー情報を返さない
 	}
 }

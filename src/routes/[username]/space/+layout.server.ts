@@ -1,18 +1,12 @@
 import type { LayoutServerLoad } from './$types'
-import { createSupabaseServerClient } from '$lib/supabase'
 
 export const load: LayoutServerLoad = async (event) => {
-	const supabase = createSupabaseServerClient(event)
-	
-	// 公開ページなので認証は必須ではない
-	// ユーザー情報があれば取得、なければnull
-	const { data: { user } } = await supabase.auth.getUser()
-	
-	// 親レイアウトの認証チェックをバイパスするために
-	// 公開ページ専用のユーザーデータを返す
+	// TODO: D1実装が必要 - ユーザー認証情報の取得
+
+	// 公開ページ専用のデータを返す
 	return {
-		user: user || null,
-		role: user?.user_metadata?.role || null,
+		user: null,
+		role: null,
 		session: null,
 		// 公開ページ専用フラグ
 		isPublicPage: true

@@ -1,12 +1,9 @@
 <script lang="ts">
-	import { createSupabaseBrowserClient } from '$lib/supabase';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import type { PageData } from './$types';
 
 	export let data: PageData;
-	
-	const supabase = createSupabaseBrowserClient();
 
 	let password = '';
 	let confirmPassword = '';
@@ -15,20 +12,8 @@
 	let isValidToken = false;
 
 	onMount(async () => {
-		// Check if user has a valid recovery token
-		const { data: { session } } = await supabase.auth.getSession();
-		if (session) {
-			isValidToken = true;
-		} else {
-			// Check URL for recovery token
-			const hashParams = new URLSearchParams(window.location.hash.substring(1));
-			const accessToken = hashParams.get('access_token');
-			const type = hashParams.get('type');
-			
-			if (accessToken && type === 'recovery') {
-				isValidToken = true;
-			}
-		}
+		// TODO: D1実装が必要 - 回復トークンの検証
+		isValidToken = false;
 	});
 
 	async function handlePasswordReset() {
@@ -46,17 +31,8 @@
 		error = '';
 
 		try {
-			const { error: updateError } = await supabase.auth.updateUser({
-				password: password
-			});
-
-			if (updateError) throw updateError;
-
-			// Sign out to clear the recovery session
-			await supabase.auth.signOut();
-			
-			// Redirect to login with success message
-			goto('/login?reset=success');
+			// TODO: D1実装が必要 - パスワード更新機能
+			error = 'この機能は現在実装中です。D1データベースへの移行が必要です。';
 		} catch (err) {
 			error = err instanceof Error ? err.message : 'パスワードの更新に失敗しました';
 		} finally {

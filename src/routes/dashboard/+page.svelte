@@ -1,22 +1,12 @@
 <script lang="ts">
   import { onMount } from 'svelte'
   import { goto } from '$app/navigation'
-  import { createSupabaseBrowserClient } from '$lib/supabase'
-  
-  const supabase = createSupabaseBrowserClient()
   let loading = true
   
   onMount(async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser()
-      
-      if (!user) {
-        goto('/login')
-        return
-      }
-      
-      // ログイン済みユーザーは適切なダッシュボードにリダイレクト
-      goto(`/${user.id}/dashboard`)
+      // TODO: D1実装が必要 - ユーザー認証とリダイレクト
+      goto('/login')
     } catch (error) {
       console.error('認証エラー:', error)
       goto('/login')

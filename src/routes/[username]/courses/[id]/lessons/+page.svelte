@@ -2,21 +2,16 @@
 	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
 	import { dndzone } from 'svelte-dnd-action'
 	import { flip } from 'svelte/animate'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: courseId = $page.params.id
-	
-	let instructorId: string | null = null
-	let redirecting = false
-	
+
 	let course: any = null
+	let space: any = null
 	let lessons: any[] = []
 	let loading = true
 	let error = ''
@@ -40,108 +35,25 @@
 	let editingLesson: any = null
 	let editMode = false
 
-	// リアクティブ文でリダイレクト処理
-	$: if (username === 'undefined' && !redirecting) {
-		redirecting = true
-		handleUndefinedUsername()
-	}
-	
-	async function handleUndefinedUsername() {
-		try {
-			const { data: { user } } = await supabase.auth.getUser()
-			if (user) {
-				const { data: profileData } = await supabase
-					.from('profiles')
-					.select('username')
-					.eq('id', user.id)
-					.single()
-				
-				if (profileData?.username) {
-					goto(`/${profileData.username}/courses/${courseId}/lessons`)
-					return
-				} else {
-					goto('/profile/setup')
-					return
-				}
-			} else {
-				goto('/login')
-				return
-			}
-		} catch (err) {
-			console.error('Redirect error:', err)
-			goto('/login')
-		}
-	}
-	
 	onMount(async () => {
-		if (username !== 'undefined') {
-			await loadInstructorData()
-			await loadData()
-		}
+		await loadData()
 	})
-	
-	async function loadInstructorData() {
-		try {
-			// usernameからinstructor_idを取得
-			const { data: profileData, error: profileError } = await supabase
-				.from('profiles')
-				.select('id')
-				.eq('username', username)
-				.single()
-			
-			if (profileError || !profileData) {
-				throw new Error('講師が見つかりません')
-			}
-			
-			instructorId = profileData.id
-		} catch (err: any) {
-			error = err.message
-			console.error('Load instructor data error:', err)
-		}
-	}
-	
+
 	async function loadData() {
 		try {
-			if (!instructorId) return
+			// APIからコース情報を取得
+			const response = await fetch(`/api/courses?id=${courseId}`)
+			const result = await response.json()
 
-			// courseIdがUUIDかslugかを判定
-			const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)
-
-			// コース情報を取得
-			let courseQuery = supabase
-				.from('courses')
-				.select(`
-					*,
-					space:spaces!inner(instructor_id, title, slug)
-				`)
-
-			if (isUUID) {
-				courseQuery = courseQuery.eq('id', courseId)
-			} else {
-				courseQuery = courseQuery.eq('slug', courseId)
+			if (!response.ok) {
+				throw new Error(result.error || 'コースの取得に失敗しました')
 			}
 
-			const { data: courseData, error: courseError } = await courseQuery.single()
+			course = result.course
+			space = result.space
 
-			if (courseError) throw courseError
-			if (!courseData) throw new Error('コースが見つかりません')
-
-			// 講師の権限チェック
-			if (courseData.space.instructor_id !== instructorId) {
-				throw new Error('このコースを編集する権限がありません')
-			}
-
-			course = courseData
-
-			// レッスン一覧を取得（実際のコースIDを使用）
-			const { data: lessonsData, error: lessonsError } = await supabase
-				.from('lessons')
-				.select('*')
-				.eq('course_id', course.id)
-				.order('order_index', { ascending: true })
-
-			if (lessonsError) throw lessonsError
-			lessons = lessonsData || []
+			// TODO: レッスンAPI実装後に取得
+			lessons = []
 
 		} catch (err: any) {
 			error = err.message
@@ -186,67 +98,8 @@
 		createError = ''
 
 		try {
-			if (!newLesson.title) {
-				throw new Error('タイトルは必須です')
-			}
-
-			// コンテンツまたは動画のいずれかが必要
-			if (!newLesson.content && !newLesson.videoUrl) {
-				throw new Error('テキストコンテンツまたは動画URLのいずれかは必須です')
-			}
-
-			// コンテンツ消費時間を分から秒に変換
-			const durationInSeconds = (newLesson.duration || 0) * 60
-
-			const lessonData = {
-				course_id: course.id,
-				title: newLesson.title,
-				description: newLesson.description,
-				content: newLesson.content || null,
-				video_type: newLesson.videoUrl ? newLesson.videoType : null,
-				video_url: newLesson.videoUrl || null,
-				duration: durationInSeconds,
-				order_index: lessons.length,
-				is_published: newLesson.isPublished
-			}
-
-			if (editMode && editingLesson) {
-				// 更新モード
-				const { data: lesson, error: updateError } = await supabase
-					.from('lessons')
-					.update({
-						...lessonData,
-						order_index: editingLesson.order_index, // 既存の順序を保持
-						updated_at: new Date().toISOString()
-					})
-					.eq('id', editingLesson.id)
-					.select()
-					.single()
-
-				if (updateError) throw updateError
-
-				// レッスンリストを更新
-				lessons = lessons.map(l => l.id === lesson.id ? lesson : l)
-			} else {
-				// 新規作成モード
-				const { data: lesson, error: createLessonError } = await supabase
-					.from('lessons')
-					.insert(lessonData)
-					.select()
-					.single()
-
-				if (createLessonError) {
-					console.error('Supabase insert error:', createLessonError)
-					throw createLessonError
-				}
-
-				// レッスンリストを更新
-				lessons = [...lessons, lesson]
-			}
-
-			// フォームをリセット
-			cancelEdit()
-
+			// TODO: レッスンAPI実装
+			createError = 'レッスン機能は現在実装中です'
 		} catch (err: any) {
 			createError = err.message || 'レッスン作成に失敗しました'
 			console.error('Lesson creation error:', err)
@@ -254,46 +107,24 @@
 			createLoading = false
 		}
 	}
-	
+
 	async function deleteLesson(lessonId: string) {
 		if (!confirm('このレッスンを削除してもよろしいですか？')) {
 			return
 		}
-		
+
 		try {
-			const { error: deleteError } = await supabase
-				.from('lessons')
-				.delete()
-				.eq('id', lessonId)
-			
-			if (deleteError) throw deleteError
-			
-			lessons = lessons.filter(l => l.id !== lessonId)
+			// TODO: レッスンAPI実装
+			alert('レッスン機能は現在実装中です')
 		} catch (err: any) {
 			alert(`削除に失敗しました: ${err.message}`)
 		}
 	}
-	
+
 	async function togglePublished(lesson: any) {
 		try {
-			const newStatus = !lesson.is_published
-			
-			const { error: updateError } = await supabase
-				.from('lessons')
-				.update({ 
-					is_published: newStatus,
-					updated_at: new Date().toISOString()
-				})
-				.eq('id', lesson.id)
-			
-			if (updateError) throw updateError
-			
-			// UIを更新
-			lessons = lessons.map(l => 
-				l.id === lesson.id 
-					? { ...l, is_published: newStatus }
-					: l
-			)
+			// TODO: レッスンAPI実装
+			alert('レッスン機能は現在実装中です')
 		} catch (err: any) {
 			alert(`公開状態の変更に失敗しました: ${err.message}`)
 		}
@@ -308,23 +139,8 @@
 	async function handleDndFinalize(e: any) {
 		lessons = e.detail.items
 		dragDisabled = true
-		
-		// 並び順をデータベースに保存
-		try {
-			const updates = lessons.map((lesson, index) => ({
-				id: lesson.id,
-				order_index: index
-			}))
-			
-			for (const update of updates) {
-				await supabase
-					.from('lessons')
-					.update({ order_index: update.order_index })
-					.eq('id', update.id)
-			}
-		} catch (err: any) {
-			console.error('Order index update error:', err)
-		}
+
+		// TODO: レッスンAPI実装後に並び順を保存
 	}
 	
 	function formatDuration(seconds: number): string {
@@ -358,9 +174,8 @@
 			<div class="flex items-center space-x-3">
 				<button
 					on:click={() => {
-						const selectedSpace = course.space
-						if (selectedSpace && course) {
-							window.open(`/${username}/space/${selectedSpace.slug}/course/${course.slug || course.id}`, '_blank')
+						if (space && course) {
+							window.open(`/${username}/space/${space.slug}/course/${course.slug || course.id}`, '_blank')
 						}
 					}}
 					class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-sm font-medium"
@@ -467,7 +282,7 @@
 										class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 									>
 										<option value="youtube">YouTube</option>
-										<option value="supabase">Supabase Storage</option>
+										<option value="external">外部ストレージ</option>
 									</select>
 								</div>
 
@@ -482,7 +297,7 @@
 										class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 										placeholder={newLesson.videoType === 'youtube'
 											? 'https://www.youtube.com/watch?v=...'
-											: 'https://supabase-storage-url...'}
+											: 'https://video-storage-url...'}
 									/>
 									<p class="mt-1 text-xs text-gray-500">動画を追加する場合はURLを入力</p>
 								</div>

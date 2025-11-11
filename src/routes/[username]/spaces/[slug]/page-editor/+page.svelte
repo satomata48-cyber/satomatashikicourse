@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
+	import { page } from '$app/stores'
 
 	export let data
 
-	const supabase = createSupabaseBrowserClient()
+	$: username = $page.params.username
+	$: slug = $page.params.slug
 
 	let space: any = null
 	let loading = true
@@ -302,23 +303,31 @@
 
 	async function loadSpace() {
 		try {
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select('*')
-				.eq('slug', data.slug)
-				.eq('instructor_id', data.user.id)
-				.single()
+			if (!username || !slug) {
+				throw new Error('ユーザー名またはスラッグが無効です')
+			}
 
-			if (spaceError) throw spaceError
+			// APIからスペース情報を取得
+			const response = await fetch(`/api/spaces?username=${username}&slug=${slug}`)
+			const result = await response.json()
 
-			space = spaceData
+			if (!response.ok) {
+				throw new Error(result.error || 'スペースの取得に失敗しました')
+			}
+
+			if (!result.space) {
+				throw new Error('スペースが見つかりません')
+			}
+
+			space = result.space
 
 			// 既存のコンテンツを読み込む
 			if (space.landing_page_content && space.landing_page_content.sections && space.landing_page_content.sections.length > 0) {
 				title = space.landing_page_content.title || space.title
 				description = space.landing_page_content.description || space.description
 				sections = space.landing_page_content.sections
-				themeColor = space.landing_page_content.theme?.primaryColor || '#2563eb'
+				const primaryColor = space.landing_page_content.theme?.primaryColor
+				themeColor = (primaryColor && primaryColor.trim() !== '') ? primaryColor : '#2563eb'
 			} else {
 				// デフォルトセクションを作成(理想的なLP構成)
 				title = space.title
@@ -415,18 +424,8 @@
 				]
 			}
 
-			// 講師プロフィール一覧を読み込む
-			const { data: profilesData, error: profilesError } = await supabase
-				.from('instructor_profiles')
-				.select('*')
-				.eq('user_id', data.user.id)
-				.eq('is_active', true)
-				.order('is_primary', { ascending: false })
-				.order('created_at', { ascending: false })
-
-			if (!profilesError) {
-				instructorProfiles = profilesData || []
-			}
+			// TODO: 講師プロフィール機能は未実装
+			instructorProfiles = []
 
 		} catch (err: any) {
 			error = err.message
@@ -444,9 +443,14 @@
 		error = ''
 
 		try {
-			const { error: updateError } = await supabase
-				.from('spaces')
-				.update({
+			// APIでスペース更新
+			const response = await fetch(`/api/spaces`, {
+				method: 'PUT',
+				headers: {
+					'Content-Type': 'application/json'
+				},
+				body: JSON.stringify({
+					id: space.id,
 					landing_page_content: {
 						title,
 						description,
@@ -457,9 +461,13 @@
 						sections
 					}
 				})
-				.eq('id', space.id)
+			})
 
-			if (updateError) throw updateError
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '保存に失敗しました')
+			}
 
 			saveMessage = '保存しました'
 			setTimeout(() => {

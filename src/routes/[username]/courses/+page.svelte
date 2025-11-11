@@ -1,13 +1,10 @@
 <script lang="ts">
 	import { onMount, tick } from 'svelte'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
 	import { goto } from '$app/navigation'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	
 	let courses: any[] = []
@@ -20,121 +17,32 @@
 	
 	
 	let redirecting = false
-	
-	// リアクティブ文でリダイレクト処理
-	$: if (username === 'undefined' && !redirecting) {
-		redirecting = true
-		handleUndefinedUsername()
-	}
-	
-	// UUIDが渡された場合のリダイレクト処理
-	$: if (username && username !== 'undefined' && !redirecting) {
-		const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
-		if (isUUID) {
-			redirecting = true
-			handleUuidUsername()
-		}
-	}
-	
-	async function handleUndefinedUsername() {
-		try {
-			const { data: { user } } = await supabase.auth.getUser()
-			if (user) {
-				const { data: profileData } = await supabase
-					.from('profiles')
-					.select('username')
-					.eq('id', user.id)
-					.single()
-				
-				if (profileData?.username) {
-					goto(`/${profileData.username}/courses`)
-					return
-				} else {
-					goto('/profile/setup')
-					return
-				}
-			} else {
-				goto('/login')
-				return
-			}
-		} catch (err) {
-			console.error('Redirect error:', err)
-			goto('/login')
-		}
-	}
 
-	// UUIDがusernameパラメータに渡された場合の処理
-	async function handleUuidUsername() {
-		try {
-			const { data: { user } } = await supabase.auth.getUser()
-			if (user) {
-				const { data: profileData } = await supabase
-					.from('profiles')
-					.select('username')
-					.eq('id', user.id)
-					.single()
-				
-				if (profileData?.username) {
-					goto(`/${profileData.username}/courses`)
-					return
-				}
+	onMount(async () => {
+		// usernameが設定されたらデータをロード（UUIDではない場合のみ）
+		if (username && username !== 'undefined' && !redirecting) {
+			const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
+			if (!isUUID && !initialized) {
+				initialized = true
+				await loadData()
 			}
-			goto('/login')
-		} catch (err) {
-			console.error('UUID redirect error:', err)
-			goto('/login')
 		}
-	}
-	
-	// usernameが設定されたらデータをロード（UUIDではない場合のみ）
-	$: if (username && username !== 'undefined' && !redirecting) {
-		const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
-		if (!isUUID && !initialized) {
-			initialized = true
-			loadData()
-		}
-	}
+	})
 	
 	async function loadData() {
 		loading = true
 		try {
-			// usernameから講師IDを取得
-			const { data: instructorData, error: instructorError } = await supabase
-				.from('profiles')
-				.select('id')
-				.eq('username', username)
-				.single()
-			
-			if (instructorError) {
-				console.error('Profile error:', instructorError)
-				if (instructorError.code === 'PGRST116') {
-					error = `ユーザー "${username}" が見つかりません`
-				} else {
-					error = 'プロフィール情報の取得に失敗しました'
-				}
-				loading = false
-				return
+			// API からコースとスペース一覧を取得
+			const response = await fetch(`/api/courses?username=${username}`)
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'データの取得に失敗しました')
 			}
-			
-			if (!instructorData) {
-				error = '講師情報が見つかりません'
-				loading = false
-				return
-			}
-			
-			// スペース一覧を取得（テーマカラーも含む）
-			const { data: spacesData, error: spacesError } = await supabase
-				.from('spaces')
-				.select('id, title, slug, landing_page_content')
-				.eq('instructor_id', instructorData.id)
-				.order('created_at', { ascending: false })
-			
-			if (spacesError) throw spacesError
-			spaces = spacesData || []
-			
-			// 全コース一覧を取得
-			await loadCourses()
-			
+
+			courses = result.courses || []
+			spaces = result.spaces || []
+
 		} catch (err: any) {
 			error = err.message
 			console.error('Load data error:', err)
@@ -143,73 +51,49 @@
 		}
 	}
 	
-	async function loadCourses() {
-		try {
-			const spaceIds = spaces.map(s => s.id)
-			if (spaceIds.length === 0) return
+	// スペースフィルタリング用のフィルター済みコース
+	$: filteredCourses = selectedSpace
+		? courses.filter(c => c.space_id === selectedSpace)
+		: courses
 
-			// テーマカラーを更新
-			if (selectedSpace) {
-				const selectedSpaceData = spaces.find(s => s.id === selectedSpace)
-				if (selectedSpaceData?.landing_page_content?.theme?.primaryColor) {
-					themeColor = selectedSpaceData.landing_page_content.theme.primaryColor
-				} else {
-					themeColor = '#3B82F6' // デフォルト
-				}
-			} else {
-				// 最初のスペースのテーマカラーを使用
-				const firstSpace = spaces[0]
-				if (firstSpace?.landing_page_content?.theme?.primaryColor) {
-					themeColor = firstSpace.landing_page_content.theme.primaryColor
-				} else {
-					themeColor = '#3B82F6' // デフォルト
-				}
-			}
-
-			let query = supabase
-				.from('courses')
-				.select(`
-					*,
-					space:spaces(title, slug),
-					lessons:lessons(count)
-				`)
-				.in('space_id', spaceIds)
-				.order('created_at', { ascending: false })
-
-			// スペースフィルタリング
-			if (selectedSpace) {
-				query = query.eq('space_id', selectedSpace)
-			}
-
-			const { data: coursesData, error: coursesError } = await query
-
-			if (coursesError) throw coursesError
-			courses = coursesData || []
-
-		} catch (err: any) {
-			error = err.message
-			console.error('Load courses error:', err)
+	// テーマカラー更新
+	$: if (selectedSpace && spaces.length > 0) {
+		const selectedSpaceData = spaces.find(s => s.id === selectedSpace)
+		if (selectedSpaceData?.landing_page_content?.theme?.primaryColor) {
+			const color = selectedSpaceData.landing_page_content.theme.primaryColor
+			themeColor = (color && color.trim() !== '') ? color : '#3B82F6'
+		} else {
+			themeColor = '#3B82F6'
+		}
+	} else if (spaces.length > 0) {
+		const firstSpace = spaces[0]
+		if (firstSpace?.landing_page_content?.theme?.primaryColor) {
+			const color = firstSpace.landing_page_content.theme.primaryColor
+			themeColor = (color && color.trim() !== '') ? color : '#3B82F6'
+		} else {
+			themeColor = '#3B82F6'
 		}
 	}
-	
-	$: if (selectedSpace !== undefined) {
-		loadCourses()
-	}
-	
+
 	async function deleteCourse(courseId: string) {
 		if (!confirm('このコースを削除してもよろしいですか？関連するレッスンもすべて削除されます。')) {
 			return
 		}
-		
+
 		try {
-			const { error: deleteError } = await supabase
-				.from('courses')
-				.delete()
-				.eq('id', courseId)
-			
-			if (deleteError) throw deleteError
-			
-			await loadCourses()
+			const response = await fetch(`/api/courses?id=${courseId}`, {
+				method: 'DELETE'
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '削除に失敗しました')
+			}
+
+			// ローカル state から削除
+			courses = courses.filter(c => c.id !== courseId)
+
 		} catch (err: any) {
 			alert(`削除に失敗しました: ${err.message}`)
 		}

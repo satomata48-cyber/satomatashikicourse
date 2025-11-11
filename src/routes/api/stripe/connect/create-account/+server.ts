@@ -1,7 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { stripe } from '$lib/stripe-server';
-import { createSupabaseServiceRoleClient } from '$lib/supabase-server';
 
 export const POST: RequestHandler = async ({ request, url }) => {
 	try {
@@ -10,25 +9,16 @@ export const POST: RequestHandler = async ({ request, url }) => {
 			return json({ error: 'Authentication required' }, { status: 401 });
 		}
 
-		// ユーザー認証
-		const supabase = createSupabaseServiceRoleClient();
+		// TODO: D1実装が必要 - ユーザー認証とプロフィール取得
 		const token = authHeader.replace('Bearer ', '');
-		const { data: { user }, error: authError } = await supabase.auth.getUser(token);
 
-		if (authError || !user) {
-			return json({ error: 'Invalid authentication token' }, { status: 401 });
-		}
-
-		// プロフィール情報を取得
-		const { data: profile, error: profileError } = await supabase
-			.from('profiles')
-			.select('stripe_account_id, email, display_name')
-			.eq('id', user.id)
-			.single();
-
-		if (profileError) {
-			return json({ error: 'Profile not found' }, { status: 404 });
-		}
+		// スタブ: 仮のプロフィールデータ
+		const profile = {
+			stripe_account_id: null,
+			email: 'stub@example.com',
+			display_name: 'Stub User'
+		};
+		const user = { id: 'stub-user-id' };
 
 		// 簡易実装：ダミーのStripeアカウントIDを設定
 		// 本番環境では実際のStripe Connectを使用
@@ -48,7 +38,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 					const account = await stripe.accounts.create({
 						type: 'express',
 						country: 'JP',
-						email: profile.email || user.email,
+						email: profile.email,
 						capabilities: {
 							card_payments: { requested: true },
 							transfers: { requested: true }
@@ -69,26 +59,13 @@ export const POST: RequestHandler = async ({ request, url }) => {
 				}
 			}
 
-			// データベースに保存
-			const { error: updateError } = await supabase
-				.from('profiles')
-				.update({
-					stripe_account_id: accountId,
-					stripe_account_status: accountStatus,
-					stripe_onboarding_completed: isDevelopment // 開発モードでは即座に完了
-				})
-				.eq('id', user.id);
-
-			if (updateError) {
-				console.error('Database update error:', updateError);
-				return json({ error: 'Failed to save account' }, { status: 500 });
-			}
+			// TODO: D1実装が必要 - データベースに保存
+			console.log('TODO: Save Stripe account to D1:', { accountId, accountStatus });
 		}
 
 		// 開発モードでは直接リターンページへ
 		if (isDevelopment) {
 			const baseUrl = url.origin;
-			const username = profile.display_name || 'instructor';
 			return json({
 				url: `${baseUrl}/api/stripe/connect/return`,
 				accountId,

@@ -1,138 +1,34 @@
 <script lang="ts">
-	import { onMount, tick } from 'svelte'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
+	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
 	import { page } from '$app/stores'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	let spaces: any[] = []
 	let loading = true
 	let error = ''
-	let initialized = false
-	
+
 	$: username = $page.params.username
-	let redirecting = false
 
-	// リアクティブ文でリダイレクト処理
-	$: if (username === 'undefined' && !redirecting) {
-		redirecting = true
-		handleUndefinedUsername()
-	}
-
-	// UUIDが渡された場合のリダイレクト処理
-	$: if (username && username !== 'undefined' && !redirecting) {
-		const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
-		if (isUUID) {
-			redirecting = true
-			handleUuidUsername()
+	onMount(async () => {
+		if (username) {
+			await loadSpaces()
 		}
-	}
-	
-	async function handleUndefinedUsername() {
-		try {
-			const { data: { user } } = await supabase.auth.getUser()
-			if (user) {
-				// プロフィールからusernameを取得
-				const { data: profileData } = await supabase
-					.from('profiles')
-					.select('username')
-					.eq('id', user.id)
-					.single()
+	})
 
-				if (profileData?.username) {
-					goto(`/${profileData.username}/spaces`)
-					return
-				} else {
-					// usernameが未設定の場合はセットアップページへ
-					goto('/profile/setup')
-					return
-				}
-			} else {
-				// ログインしていない場合はログインページへ
-				goto('/login')
-				return
-			}
-		} catch (err) {
-			console.error('Redirect error:', err)
-			goto('/login')
-		}
-	}
-
-	// UUIDがusernameパラメータに渡された場合の処理
-	async function handleUuidUsername() {
-		try {
-			const { data: { user } } = await supabase.auth.getUser()
-			if (user) {
-				const { data: profileData } = await supabase
-					.from('profiles')
-					.select('username')
-					.eq('id', user.id)
-					.single()
-
-				if (profileData?.username) {
-					goto(`/${profileData.username}/spaces`)
-					return
-				}
-			}
-			goto('/login')
-		} catch (err) {
-			console.error('UUID redirect error:', err)
-			goto('/login')
-		}
-	}
-
-	// usernameが設定されたらデータをロード（UUIDではない場合のみ）
-	$: if (username && username !== 'undefined' && !redirecting) {
-		const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
-		if (!isUUID && !initialized) {
-			initialized = true
-			loadSpaces()
-		}
-	}
-	
 	async function loadSpaces() {
 		loading = true
+		error = ''
 		try {
-			// URLのusernameからuser_idを取得して instructor_idとして使用
-			// まずユーザーネームから実際のuser_idを取得
-			const { data: profileData, error: profileError } = await supabase
-				.from('profiles')
-				.select('id')
-				.eq('username', username)
-				.single()
-			
-			if (profileError) {
-				console.error('Profile error:', profileError)
-				if (profileError.code === 'PGRST116') {
-					error = `ユーザー "${username}" が見つかりません`
-				} else {
-					error = 'プロフィール情報の取得に失敗しました'
-				}
-				loading = false
-				return
+			const response = await fetch(`/api/spaces?username=${username}`)
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'スペースの取得に失敗しました')
 			}
-			
-			if (!profileData) {
-				error = 'ユーザーが見つかりません'
-				loading = false
-				return
-			}
-			const { data: spacesData, error: spacesError } = await supabase
-				.from('spaces')
-				.select(`
-					*,
-					courses:courses(count),
-					students:space_students(count)
-				`)
-				.eq('instructor_id', profileData.id)
-				.order('created_at', { ascending: false })
-			
-			if (spacesError) throw spacesError
-			
-			spaces = spacesData || []
+
+			spaces = result.spaces || []
 		} catch (err: any) {
 			error = err.message
 			console.error('Load spaces error:', err)
@@ -140,55 +36,26 @@
 			loading = false
 		}
 	}
-	
+
 	async function deleteSpace(spaceId: string) {
 		if (!confirm('このスペースを削除してもよろしいですか？関連するコースもすべて削除されます。')) {
 			return
 		}
-		
+
 		try {
-			// 現在のユーザーを取得
-			const { data: { user } } = await supabase.auth.getUser()
-			
-			if (!user) {
-				alert('ログインが必要です')
-				goto('/login')
-				return
+			const response = await fetch(`/api/spaces?id=${spaceId}`, {
+				method: 'DELETE'
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '削除に失敗しました')
 			}
-			
-			// まず、スペースの所有者であることを確認
-			const { data: spaceData, error: checkError } = await supabase
-				.from('spaces')
-				.select('instructor_id')
-				.eq('id', spaceId)
-				.single()
-			
-			if (checkError) {
-				console.error('Space check error:', checkError)
-				alert(`スペースの確認に失敗しました: ${checkError.message}`)
-				return
-			}
-			
-			if (spaceData.instructor_id !== user.id) {
-				alert('このスペースを削除する権限がありません')
-				return
-			}
-			
-			// スペースを削除
-			const { error: deleteError } = await supabase
-				.from('spaces')
-				.delete()
-				.eq('id', spaceId)
-				.eq('instructor_id', user.id) // 追加の安全確認
-			
-			if (deleteError) {
-				console.error('Delete error:', deleteError)
-				throw deleteError
-			}
-			
+
 			// 成功メッセージ
 			alert('スペースが正常に削除されました')
-			
+
 			// リストを再読み込み
 			await loadSpaces()
 		} catch (err: any) {
@@ -197,8 +64,11 @@
 		}
 	}
 	
-	function formatDate(dateString: string): string {
-		return new Date(dateString).toLocaleDateString('ja-JP')
+	function formatDate(timestamp: number | string): string {
+		if (typeof timestamp === 'number') {
+			return new Date(timestamp * 1000).toLocaleDateString('ja-JP')
+		}
+		return new Date(timestamp).toLocaleDateString('ja-JP')
 	}
 </script>
 

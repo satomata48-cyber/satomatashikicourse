@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
+	import { page } from '$app/stores'
 
 	export let data
 
-	const supabase = createSupabaseBrowserClient()
+	$: username = $page.params.username
+	$: courseId = $page.params.id
 
 	let course: any = null
 	let space: any = null
@@ -300,44 +301,21 @@
 
 	async function loadCourse() {
 		try {
-			// courseIdがUUIDかslugかを判定
-			const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(data.courseId)
+			// APIからコース情報を取得
+			const response = await fetch(`/api/courses?id=${courseId}`)
+			const result = await response.json()
 
-			let courseQuery = supabase
-				.from('courses')
-				.select(`
-					*,
-					space:spaces!inner(
-						id,
-						title,
-						slug,
-						instructor_id,
-						landing_page_content
-					)
-				`)
-
-			if (isUUID) {
-				courseQuery = courseQuery.eq('id', data.courseId)
-			} else {
-				courseQuery = courseQuery.eq('slug', data.courseId)
+			if (!response.ok) {
+				throw new Error(result.error || 'コースの取得に失敗しました')
 			}
 
-			const { data: courseData, error: courseError } = await courseQuery.single()
-
-			if (courseError) throw courseError
-			if (!courseData) throw new Error('コースが見つかりません')
-
-			// 権限チェック: コースのスペースの所有者であるか確認
-			if (courseData.space.instructor_id !== data.user.id) {
-				throw new Error('このコースを編集する権限がありません')
-			}
-
-			course = courseData
-			space = courseData.space
+			course = result.course
+			space = result.space
 
 			// スペースのテーマカラーを取得
-			if (space.landing_page_content?.theme?.primaryColor) {
-				themeColor = space.landing_page_content.theme.primaryColor
+			if (space?.landing_page_content?.theme?.primaryColor) {
+				const color = space.landing_page_content.theme.primaryColor
+				themeColor = (color && color.trim() !== '') ? color : '#3B82F6'
 			}
 
 			// 既存のコンテンツを読み込む
@@ -401,15 +379,8 @@
 	async function loadLessons() {
 		try {
 			if (!course?.id) return
-
-			const { data: lessonsData, error: lessonsError } = await supabase
-				.from('lessons')
-				.select('id, title, description, content, video_url, video_type, duration, order_index, is_published')
-				.eq('course_id', course.id)
-				.order('order_index', { ascending: true })
-
-			if (lessonsError) throw lessonsError
-			lessons = lessonsData || []
+			// TODO: レッスンAPI実装後に追加
+			lessons = []
 		} catch (err: any) {
 			console.error('Load lessons error:', err)
 		}
@@ -433,15 +404,20 @@
 				}
 			}
 
-			const { error: updateError } = await supabase
-				.from('courses')
-				.update({
-					course_page_content: updatedContent,
-					updated_at: new Date().toISOString()
+			const response = await fetch('/api/courses', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id: course.id,
+					course_page_content: updatedContent
 				})
-				.eq('id', course.id)
+			})
 
-			if (updateError) throw updateError
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '保存に失敗しました')
+			}
 
 			saveMessage = '保存しました'
 			setTimeout(() => {
@@ -577,7 +553,7 @@
 
 	function previewPage() {
 		if (space && course) {
-			window.open(`/${data.username}/space/${space.slug}/course/${course.slug || course.id}`, '_blank')
+			window.open(`/${username}/space/${space.slug}/course/${course.id}`, '_blank')
 		}
 	}
 
@@ -594,9 +570,9 @@
 			<div>
 				<h1 class="text-xl font-bold text-gray-900">コースページエディター</h1>
 				<p class="text-sm text-gray-600 mt-1">
-					<a href="/{data.username}/courses" class="hover:text-blue-600">コース一覧</a>
+					<a href="/{username}/courses" class="hover:text-blue-600">コース一覧</a>
 					<span class="mx-2">/</span>
-					<a href="/{data.username}/courses/{data.courseId}/edit" class="hover:text-blue-600">
+					<a href="/{username}/courses/{courseId}/edit" class="hover:text-blue-600">
 						{course?.title || 'Loading...'}
 					</a>
 					<span class="mx-2">/</span>
@@ -744,7 +720,7 @@
 													<div class="font-medium mb-1">📌 スペースヘッダー自動表示</div>
 													<p class="text-gray-500">
 														スペース設定のヘッダー情報が自動的に表示されます。<br>
-														編集するには「<a href="/{data.username}/spaces" class="text-blue-600 hover:underline">スペース管理</a>」から設定してください。
+														編集するには「<a href="/{username}/spaces" class="text-blue-600 hover:underline">スペース管理</a>」から設定してください。
 													</p>
 												</div>
 											{:else if section.type === 'course-info'}
@@ -752,7 +728,7 @@
 													<div class="font-medium mb-1">📌 コース情報自動表示</div>
 													<p class="text-gray-500">
 														コースのタイトル、説明、サムネイル、価格が自動的に表示されます。<br>
-														編集するには「<a href="/{data.username}/courses/{data.courseId}/edit" class="text-blue-600 hover:underline">コース編集</a>」から設定してください。
+														編集するには「<a href="/{username}/courses/{courseId}/edit" class="text-blue-600 hover:underline">コース編集</a>」から設定してください。
 													</p>
 												</div>
 											{:else if section.type === 'lessons-list'}
@@ -760,7 +736,7 @@
 													<div class="font-medium mb-1">📌 レッスン一覧自動表示</div>
 													<p class="text-gray-500">
 														レッスン管理ページで作成したレッスンが自動的に表示されます。<br>
-														編集するには「<a href="/{data.username}/courses/{data.courseId}/lessons" class="text-blue-600 hover:underline">レッスン管理</a>」から設定してください。
+														編集するには「<a href="/{username}/courses/{courseId}/lessons" class="text-blue-600 hover:underline">レッスン管理</a>」から設定してください。
 													</p>
 												</div>
 											{:else if section.type === 'space-footer'}
@@ -768,7 +744,7 @@
 													<div class="font-medium mb-1">📌 スペースフッター自動表示</div>
 													<p class="text-gray-500">
 														スペース設定のフッター情報が自動的に表示されます。<br>
-														編集するには「<a href="/{data.username}/spaces" class="text-blue-600 hover:underline">スペース管理</a>」から設定してください。
+														編集するには「<a href="/{username}/spaces" class="text-blue-600 hover:underline">スペース管理</a>」から設定してください。
 													</p>
 												</div>
 											{:else}
@@ -1132,7 +1108,7 @@
 													<p class="text-gray-500 text-lg mb-2">レッスンがまだありません</p>
 													<p class="text-gray-400 text-sm mb-6">レッスン管理ページからレッスンを追加してください</p>
 													<a
-														href="/{data.username}/courses/{data.courseId}/lessons"
+														href="/{username}/courses/{courseId}/lessons"
 														class="inline-block px-6 py-3 rounded-lg font-semibold text-white hover:opacity-90 transition-opacity"
 														style="background-color: {themeColor}"
 													>
@@ -1198,7 +1174,7 @@
 												<!-- レッスン管理へのリンク -->
 												<div class="mt-8 text-center">
 													<a
-														href="/{data.username}/courses/{data.courseId}/lessons"
+														href="/{username}/courses/{courseId}/lessons"
 														class="inline-flex items-center text-sm hover:underline"
 														style="color: {themeColor}"
 													>

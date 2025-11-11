@@ -2,15 +2,12 @@
 	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: slug = $page.params.slug
-	
+
 	let space: any = null
 	let instructor: any = null
 	let loading = true
@@ -19,7 +16,7 @@
 	let isLoggedIn = false
 	let isAlreadyEnrolled = false
 	let needsSignUp = false
-	
+
 	// 生徒登録フォーム
 	let signUpData = {
 		email: '',
@@ -29,7 +26,7 @@
 	let signUpLoading = false
 	let signUpError = ''
 	let signUpSuccess = false
-	
+
 	// リアクティブにパラメータが設定されたらデータを読み込み
 	$: if (username && slug && username !== 'undefined' && slug !== 'undefined') {
 		console.log('Loading enroll data for:', { username, slug })
@@ -39,35 +36,11 @@
 	} else {
 		console.log('Waiting for enroll params:', { username, slug })
 	}
-	
+
 	async function loadSpaceData() {
 		try {
-			// usernameで講師情報を取得
-			const { data: instructorData, error: instructorError } = await supabase
-				.from('profiles')
-				.select('id, display_name, email')
-				.eq('username', username)
-				.single()
-			
-			if (instructorError || !instructorData) {
-				throw new Error('講師が見つかりません')
-			}
-			
-			// スペース情報を取得
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select('*')
-				.eq('slug', slug)
-				.eq('instructor_id', instructorData.id)
-				.single()
-			
-			if (spaceError) throw spaceError
-			if (!spaceData) throw new Error('スペースが見つかりません')
-			if (!spaceData.is_active) throw new Error('このスペースは現在新規登録を受け付けていません')
-			
-			space = spaceData
-			instructor = instructorData
-			
+			// TODO: D1実装が必要 - スペース情報の取得
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			error = err.message
 			console.error('Load space data error:', err)
@@ -75,112 +48,51 @@
 			loading = false
 		}
 	}
-	
+
 	async function checkUserStatus() {
 		isLoggedIn = !!data.user
-		
+
 		if (data.user && space) {
-			// 既に登録されているかチェック
-			const { data: enrollment } = await supabase
-				.from('space_students')
-				.select('*')
-				.eq('student_id', data.user.id)
-				.eq('space_id', space.id)
-				.single()
-			
-			if (enrollment) {
-				isAlreadyEnrolled = true
-				// 既に登録済みの場合は生徒ダッシュボードにリダイレクト
-				setTimeout(() => {
-					goto(`/${username}/space/${slug}/student`)
-				}, 2000)
-			}
+			// TODO: D1実装が必要 - 登録状態の確認
+			isAlreadyEnrolled = false
 		}
 	}
-	
+
 	async function handleSignUp() {
 		signUpLoading = true
 		signUpError = ''
-		
+
 		try {
 			if (!signUpData.email || !signUpData.password || !signUpData.displayName) {
 				throw new Error('すべての項目を入力してください')
 			}
-			
-			// サインアップ
-			const { data: authData, error: authError } = await supabase.auth.signUp({
-				email: signUpData.email,
-				password: signUpData.password,
-				options: {
-					data: {
-						display_name: signUpData.displayName,
-						role: 'student',
-						space_info: {
-							space_id: space.id,
-							username: username,
-							slug: slug
-						}
-					}
-				}
-			})
-			
-			if (authError) throw authError
-			if (!authData.user) throw new Error('ユーザー作成に失敗しました')
-			
-			// プロファイル作成はauth callbackで行われるため、ここでは不要
-			// メール確認後、auth callbackで自動的にプロファイルとスペース登録が処理される
-			signUpError = ''
-			signUpSuccess = true
-			
-			return // ここで処理を終了
-			
+
+			// TODO: D1実装が必要 - サインアップ処理
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			console.error('Signup error:', err)
-			if (err.message && err.message.includes('429')) {
-				signUpError = 'サーバーが混雑しています。しばらく時間をおいてから再度お試しください。'
-			} else if (err.message && err.message.includes('rate limit')) {
-				signUpError = '登録の試行回数が上限に達しました。時間をおいてから再度お試しください。'
-			} else {
-				signUpError = err.message || '登録に失敗しました。しばらく時間をおいてから再度お試しください。'
-			}
+			signUpError = err.message || '登録に失敗しました。しばらく時間をおいてから再度お試しください。'
 		} finally {
 			signUpLoading = false
 		}
 	}
-	
+
 	async function handleEnroll() {
 		if (!data.user) {
 			needsSignUp = true
 			return
 		}
-		
+
 		await enrollToSpace(data.user.id)
 	}
-	
+
 	async function enrollToSpace(userId: string) {
 		enrolling = true
 		error = ''
-		
+
 		try {
-			// スペースに登録
-			const { error: enrollError } = await supabase
-				.from('space_students')
-				.insert({
-					student_id: userId,
-					space_id: space.id,
-					status: 'active'
-				})
-			
-			if (enrollError) {
-				if (enrollError.code === '23505') { // unique violation
-					throw new Error('既にこのスペースに登録されています')
-				}
-				throw enrollError
-			}
-			
-			// 登録完了、生徒ダッシュボードにリダイレクト
-			goto(`/${username}/space/${slug}/student`)
-			
+			// TODO: D1実装が必要 - スペースへの登録
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			error = err.message
 		} finally {

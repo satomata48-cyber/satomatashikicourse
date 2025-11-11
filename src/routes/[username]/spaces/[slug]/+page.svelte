@@ -1,66 +1,38 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: slug = $page.params.slug
-	
+
 	let space: any = null
 	let courses: any[] = []
 	let students: any[] = []
 	let loading = true
 	let error = ''
-	
+
 	onMount(async () => {
 		await loadSpaceData()
 	})
-	
+
 	async function loadSpaceData() {
 		try {
 			// スペース情報を取得
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select('*')
-				.eq('instructor_id', data.user.id)
-				.eq('slug', slug)
-				.single()
-			
-			if (spaceError) throw spaceError
-			if (!spaceData) throw new Error('スペースが見つかりません')
-			
-			space = spaceData
-			
-			// コース一覧を取得
-			const { data: coursesData, error: coursesError } = await supabase
-				.from('courses')
-				.select(`
-					*,
-					lessons:lessons(count)
-				`)
-				.eq('space_id', space.id)
-				.order('created_at', { ascending: false })
-			
-			if (coursesError) throw coursesError
-			courses = coursesData || []
-			
-			// 生徒一覧を取得
-			const { data: studentsData, error: studentsError } = await supabase
-				.from('space_students')
-				.select(`
-					*,
-					profile:profiles(display_name, email)
-				`)
-				.eq('space_id', space.id)
-				.eq('status', 'active')
-			
-			if (studentsError) throw studentsError
-			students = studentsData || []
-			
+			const response = await fetch(`/api/spaces?username=${username}&slug=${slug}`)
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'スペースの取得に失敗しました')
+			}
+
+			space = result.space
+
+			// コース一覧と生徒一覧は今後実装予定
+			courses = []
+			students = []
+
 		} catch (err: any) {
 			error = err.message
 			console.error('Load space data error:', err)
@@ -68,9 +40,12 @@
 			loading = false
 		}
 	}
-	
-	function formatDate(dateString: string): string {
-		return new Date(dateString).toLocaleDateString('ja-JP')
+
+	function formatDate(timestamp: number | string): string {
+		if (typeof timestamp === 'number') {
+			return new Date(timestamp * 1000).toLocaleDateString('ja-JP')
+		}
+		return new Date(timestamp).toLocaleDateString('ja-JP')
 	}
 	
 	function formatCurrency(price: number): string {

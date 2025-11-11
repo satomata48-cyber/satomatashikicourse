@@ -1,12 +1,9 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
 	import { createStripeConnectAccount } from '$lib/stripe-connect'
 
 	export let data
-
-	const supabase = createSupabaseBrowserClient()
 
 	$: username = $page.params.username
 
@@ -70,31 +67,29 @@
 
 	async function loadPaymentSettings() {
 		try {
-			const { data: { user } } = await supabase.auth.getUser()
-
-			if (!user) {
-				error = 'ログインが必要です'
+			if (!username) {
+				error = 'ユーザー名が必要です'
 				loading = false
 				return
 			}
 
-			// プロフィールからStripe情報を取得
-			const { data: profileData, error: profileError } = await supabase
-				.from('profiles')
-				.select('stripe_account_id, stripe_account_status, stripe_onboarding_completed')
-				.eq('id', user.id)
-				.single()
+			// APIからスペースとコース情報を取得（プロフィール情報も含む）
+			const response = await fetch(`/api/courses?username=${username}`)
+			const result = await response.json()
 
-			if (profileError) throw profileError
-
-			if (profileData) {
-				stripeAccountId = profileData.stripe_account_id || ''
-				stripeAccountStatus = profileData.stripe_account_status || 'pending'
-				stripeOnboardingCompleted = profileData.stripe_onboarding_completed || false
+			if (!response.ok) {
+				throw new Error(result.error || 'データの取得に失敗しました')
 			}
 
-			// 売上統計を取得（簡易版）
-			await loadRevenueStats(user.id)
+			// プロフィール情報を取得（profileフィールドが存在する場合）
+			if (result.profile) {
+				stripeAccountId = result.profile.stripe_account_id || ''
+				stripeAccountStatus = result.profile.stripe_account_status || 'pending'
+				stripeOnboardingCompleted = result.profile.stripe_onboarding_completed || false
+			}
+
+			// 売上統計を取得
+			await loadRevenueStats()
 
 		} catch (err: any) {
 			error = err.message
@@ -104,75 +99,48 @@
 		}
 	}
 
-	async function loadRevenueStats(userId: string) {
+	async function loadRevenueStats() {
 		try {
-			// スペース情報を取得
-			const { data: spaces } = await supabase
-				.from('spaces')
-				.select('id, title, slug')
-				.eq('instructor_id', userId)
+			// APIからスペースとコース情報を取得
+			const response = await fetch(`/api/courses?username=${username}`)
+			const result = await response.json()
 
-			if (!spaces || spaces.length === 0) return
-
-			const spaceIds = spaces.map(s => s.id)
-
-			// コース情報と購入データを取得
-			const { data: courses } = await supabase
-				.from('courses')
-				.select(`
-					id,
-					title,
-					price,
-					space_id,
-					stripe_product_id
-				`)
-				.in('space_id', spaceIds)
-
-			if (!courses || courses.length === 0) return
-
-			const courseIds = courses.map(c => c.id)
-
-			// 購入データを集計
-			const { data: purchases, error: purchaseError } = await supabase
-				.from('course_purchases')
-				.select('course_id, amount, status')
-				.in('course_id', courseIds)
-				.eq('status', 'completed')
-
-			// 全体の統計を計算
-			if (!purchaseError && purchases) {
-				totalSales = purchases.length
-				totalRevenue = purchases.reduce((sum, p) => sum + (p.amount || 0), 0)
+			if (!response.ok) {
+				console.error('Failed to load courses:', result.error)
+				return
 			}
 
-			// スペースごとに集計
-			spaceRevenueList = spaces.map(space => {
-				const spaceCourses = courses.filter(c => c.space_id === space.id)
+			const spaces = result.spaces || []
+			const courses = result.courses || []
 
-				const courseRevenueData: CourseRevenue[] = spaceCourses.map(course => {
-					const coursePurchases = purchases?.filter(p => p.course_id === course.id) || []
-					const salesCount = coursePurchases.length
-					const revenue = coursePurchases.reduce((sum, p) => sum + (p.amount || 0), 0)
+			if (spaces.length === 0) return
 
+			// TODO: 購入データAPIの実装が必要
+			// 現在は購入データがないため、統計は0のままにします
+			totalSales = 0
+			totalRevenue = 0
+
+			// スペースごとに集計（購入データがないため空の配列）
+			spaceRevenueList = spaces.map((space: any) => {
+				const spaceCourses = courses.filter((c: any) => c.space_id === space.id)
+
+				const courseRevenueData: CourseRevenue[] = spaceCourses.map((course: any) => {
 					return {
 						courseId: course.id,
 						courseTitle: course.title,
 						price: course.price || 0,
-						revenue,
-						salesCount,
+						revenue: 0, // TODO: 購入データから計算
+						salesCount: 0, // TODO: 購入データから計算
 						stripeProductId: course.stripe_product_id
 					}
 				})
-
-				const spaceTotal = courseRevenueData.reduce((sum, c) => sum + c.revenue, 0)
-				const spaceSales = courseRevenueData.reduce((sum, c) => sum + c.salesCount, 0)
 
 				return {
 					spaceId: space.id,
 					spaceTitle: space.title,
 					spaceSlug: space.slug,
-					totalRevenue: spaceTotal,
-					totalSales: spaceSales,
+					totalRevenue: 0, // TODO: 購入データから計算
+					totalSales: 0, // TODO: 購入データから計算
 					courses: courseRevenueData
 				}
 			})
@@ -188,18 +156,8 @@
 			error = ''
 			successMessage = ''
 
-			// セッショントークンを取得
-			const { data: { session } } = await supabase.auth.getSession()
-			if (!session?.access_token) {
-				error = 'ログインが必要です'
-				return
-			}
-
-			// Stripe Connectアカウントを作成/オンボーディングURLを取得
-			const onboardingUrl = await createStripeConnectAccount(session.access_token)
-
-			// Stripeのオンボーディングページにリダイレクト
-			window.location.href = onboardingUrl
+			// TODO: Stripe Connect機能は後で実装
+			error = 'Stripe Connect機能は現在実装中です'
 
 		} catch (err: any) {
 			error = err.message || 'Stripe接続に失敗しました'
@@ -214,12 +172,6 @@
 			saving = true
 			error = ''
 			successMessage = ''
-
-			const { data: { user } } = await supabase.auth.getUser()
-			if (!user) {
-				error = 'ログインが必要です'
-				return
-			}
 
 			// モードを切り替え
 			isTestMode = !isTestMode

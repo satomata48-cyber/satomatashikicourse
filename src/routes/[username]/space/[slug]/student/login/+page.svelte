@@ -2,9 +2,6 @@
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
 	import { goto } from '$app/navigation'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-
-	const supabase = createSupabaseBrowserClient()
 
 	$: username = $page.params.username
 	$: slug = $page.params.slug
@@ -19,35 +16,15 @@
 		// スペース情報を取得
 		await loadSpace()
 
-		// 既にログインしている場合は生徒ダッシュボードへリダイレクト
-		const { data: { user } } = await supabase.auth.getUser()
-		if (user && space) {
-			// このスペースに登録されているかチェック
-			const { data: enrollment } = await supabase
-				.from('space_students')
-				.select('*')
-				.eq('student_id', user.id)
-				.eq('space_id', space.id)
-				.single()
-
-			if (enrollment && enrollment.status === 'active') {
-				goto(`/${username}/space/${slug}/student`)
-			}
-		}
+		// TODO: D1実装が必要 - ログイン状態のチェック
 	})
 
 	async function loadSpace() {
 		try {
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select('*')
-				.eq('slug', slug)
-				.single()
-
-			if (spaceError) throw spaceError
-			space = spaceData
+			// TODO: D1実装が必要 - スペース情報の取得
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
-			error = 'スペースが見つかりません'
+			error = err.message
 			console.error('Load space error:', err)
 		}
 	}
@@ -57,42 +34,8 @@
 		error = ''
 
 		try {
-			// Supabase認証でログイン
-			const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-				email,
-				password
-			})
-
-			if (authError) throw authError
-
-			if (!authData.user) {
-				throw new Error('ログインに失敗しました')
-			}
-
-			// このスペースに登録されているかチェック
-			const { data: enrollment, error: enrollmentError } = await supabase
-				.from('space_students')
-				.select('*')
-				.eq('student_id', authData.user.id)
-				.eq('space_id', space.id)
-				.single()
-
-			if (enrollmentError || !enrollment) {
-				// 登録されていない場合は登録ページへ
-				error = 'このスペースに登録されていません。まず生徒登録を行ってください。'
-				await supabase.auth.signOut()
-				return
-			}
-
-			if (enrollment.status !== 'active') {
-				error = 'アカウントがアクティブではありません。講師にお問い合わせください。'
-				await supabase.auth.signOut()
-				return
-			}
-
-			// 生徒ダッシュボードへリダイレクト
-			goto(`/${username}/space/${slug}/student`)
-
+			// TODO: D1実装が必要 - ログイン処理
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			error = err.message || 'ログインに失敗しました'
 			console.error('Login error:', err)

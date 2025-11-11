@@ -1,17 +1,13 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	import { getInstructorIdFromUuid } from '$lib/utils/instructor'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: slug = $page.params.slug
 	$: courseId = $page.params.id
-	
+
 	let space: any = null
 	let course: any = null
 	let lessons: any[] = []
@@ -20,159 +16,46 @@
 	let loading = true
 	let error = ''
 	let themeColor = '#3B82F6' // デフォルト: blue-600
-	
+
 	onMount(async () => {
 		await loadCourseData()
 	})
-	
+
 	async function loadCourseData() {
 		try {
-			// usernameから講師IDを取得
-			const { data: profileData, error: profileError } = await supabase
-				.from('profiles')
-				.select('id')
-				.eq('username', username)
-				.single()
-			
-			if (profileError || !profileData) {
-				throw new Error('講師が見つかりません')
+			// courseIdがUUIDかslugかを判定
+			const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)
+
+			let response;
+			if (isUUID) {
+				// UUIDの場合は従来通りID検索
+				response = await fetch(`/api/courses?id=${courseId}`)
+			} else {
+				// slugの場合はslug検索
+				response = await fetch(`/api/courses?username=${username}&space_slug=${slug}&slug=${courseId}`)
 			}
-			
-			const instructorId = profileData.id
-			
-			// 現在のユーザーが生徒として登録されているかチェック
-			const { data: { user } } = await supabase.auth.getUser()
-			if (user) {
-				const { data: studentData } = await supabase
-					.from('space_students')
-					.select('*, student:profiles!student_id(id, display_name, email)')
-					.eq('student_id', user.id)
-					.eq('status', 'active')
-					.maybeSingle()
-				
-				if (studentData) {
-					student = studentData.student
-					// このスペースの生徒であるかチェック
-					const { data: spaceStudentData } = await supabase
-						.from('space_students')
-						.select('*')
-						.eq('student_id', user.id)
-						.eq('status', 'active')
-						.maybeSingle()
-					
-					if (spaceStudentData) {
-						hasAccess = true
-					}
-				}
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'コースの取得に失敗しました')
 			}
-			
-			// スペース情報を取得
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select('*')
-				.eq('slug', slug)
-				.eq('instructor_id', instructorId)
-				.single()
-			
-			if (spaceError) throw spaceError
-			space = spaceData
+
+			course = result.course
+			space = result.space
 
 			// テーマカラーを設定
 			if (space?.landing_page_content?.theme?.primaryColor) {
-				themeColor = space.landing_page_content.theme.primaryColor
+				const color = space.landing_page_content.theme.primaryColor
+				themeColor = (color && color.trim() !== '') ? color : '#3B82F6'
 			}
 
-			// 生徒登録状況を確認（認証されている場合のみ）
-			let currentUser = null
-			try {
-				const { data: { user } } = await supabase.auth.getUser()
-				currentUser = user
-			} catch (err) {
-				console.log('Not authenticated or error getting user')
-			}
-			
-			if (currentUser?.id) {
-				try {
-					const { data: studentData } = await supabase
-						.from('space_students')
-						.select('*')
-						.eq('student_id', currentUser.id)
-						.eq('space_id', space.id)
-						.single()
-					
-					student = studentData
-				} catch (err) {
-					// 登録されていない場合はエラーになるが、それは正常
-					console.log('Student not enrolled yet:', err.message)
-					student = null
-				}
-			} else {
-				// 認証されていない場合
-				student = null
-			}
-			
-			// コース詳細を取得（IDまたはslugで検索）
-			let courseQuery = supabase
-				.from('courses')
-				.select(`
-					*,
-					purchases:course_purchases(
-						status,
-						purchased_at,
-						amount,
-						currency
-					)
-				`)
-				.eq('space_id', space.id)
-			
-			// UUIDの場合はid、そうでなければslugで検索
-			const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)
-			if (isUUID) {
-				courseQuery = courseQuery.eq('id', courseId)
-			} else {
-				courseQuery = courseQuery.eq('slug', courseId)
-			}
-			
-			const { data: courseData, error: courseError } = await courseQuery.single()
-			
-			if (courseError) {
-				console.error('Course query error:', courseError)
-				throw new Error('コースが見つかりません')
-			}
-			if (!courseData) throw new Error('コースが見つかりません')
-			
-			course = courseData
-			
-			// アクセス権限を確認
-			if (course.is_free) {
-				hasAccess = !!student
-			} else {
-				hasAccess = !!student && course.purchases && course.purchases.some(p => p.status === 'completed')
-			}
-			
-			// レッスン一覧を取得（実際のコースIDを使用）
-			let lessonsQuery = supabase
-				.from('lessons')
-				.select(`
-					*,
-					progress:lesson_progress(
-						watch_time,
-						total_duration,
-						completed,
-						last_watched_at
-					)
-				`)
-				.eq('course_id', course.id)
-				.order('order_index', { ascending: true })
-			
-			// 公開済みレッスンのみ取得
-			lessonsQuery = lessonsQuery.eq('is_published', true)
-			
-			const { data: lessonsData, error: lessonsError } = await lessonsQuery
-			
-			if (lessonsError) throw lessonsError
-			lessons = lessonsData || []
-			
+			// TODO: 生徒のアクセス権限チェック（将来実装）
+			hasAccess = false
+
+			// TODO: レッスン一覧取得（将来実装）
+			lessons = []
+
 		} catch (err: any) {
 			error = err.message || 'データの読み込みに失敗しました'
 			console.error('Load course data error:', err)

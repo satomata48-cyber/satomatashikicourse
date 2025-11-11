@@ -1,19 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: slug = $page.params.slug
-	
+
 	let space: any = null
 	let students: any[] = []
-	let loading = true
-	let error = ''
+	let loading = false
+	let error = '生徒管理機能は現在実装中です'
 	let searchQuery = ''
 	let statusFilter = 'all'
 	let showInviteForm = false
@@ -21,125 +18,33 @@
 	let inviteLoading = false
 	let inviteError = ''
 	let inviteSuccess = ''
-	
+
 	$: filteredStudents = students.filter(student => {
 		const matchesSearch = student.profile?.display_name?.toLowerCase().includes(searchQuery.toLowerCase()) ||
 			student.profile?.email?.toLowerCase().includes(searchQuery.toLowerCase())
 		const matchesStatus = statusFilter === 'all' || student.status === statusFilter
 		return matchesSearch && matchesStatus
 	})
-	
+
 	onMount(async () => {
-		await loadData()
+		// TODO: 生徒管理機能の実装
 	})
-	
+
 	async function loadData() {
-		try {
-			// スペース情報を取得
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select('*')
-				.eq('instructor_id', data.user.id)
-				.eq('slug', slug)
-				.single()
-			
-			if (spaceError) throw spaceError
-			if (!spaceData) throw new Error('スペースが見つかりません')
-			
-			space = spaceData
-			
-			// 生徒一覧を取得
-			const { data: studentsData, error: studentsError } = await supabase
-				.from('space_students')
-				.select(`
-					*,
-					profile:profiles(display_name, email, avatar_url)
-				`)
-				.eq('space_id', space.id)
-				.order('enrolled_at', { ascending: false })
-			
-			if (studentsError) throw studentsError
-			students = studentsData || []
-			
-			// 各生徒のコース購入情報を取得
-			if (students.length > 0) {
-				// このスペースのコースIDを取得
-				const { data: coursesData } = await supabase
-					.from('courses')
-					.select('id')
-					.eq('space_id', space.id)
-				
-				const courseIds = coursesData ? coursesData.map(c => c.id) : []
-				
-				if (courseIds.length > 0) {
-					const studentIds = students.map(s => s.student_id)
-					const { data: purchasesData } = await supabase
-						.from('course_purchases')
-						.select(`
-							*,
-							course:courses(title)
-						`)
-						.in('student_id', studentIds)
-						.in('course_id', courseIds)
-					
-					// 購入情報を生徒データにマージ
-					if (purchasesData) {
-						students = students.map(student => ({
-							...student,
-							purchases: purchasesData.filter(p => p.student_id === student.student_id)
-						}))
-					}
-				}
-			}
-			
-		} catch (err: any) {
-			error = err.message
-			console.error('Load data error:', err)
-		} finally {
-			loading = false
-		}
+		// TODO: 生徒管理機能の実装が必要
+		// - 生徒一覧取得API
+		// - コース購入情報取得API
+		// を実装してからこの機能を有効化します
 	}
 	
 	async function updateStudentStatus(studentId: string, newStatus: string) {
-		try {
-			const { error: updateError } = await supabase
-				.from('space_students')
-				.update({ 
-					status: newStatus,
-					notes: newStatus === 'suspended' ? '講師により停止' : null
-				})
-				.eq('id', studentId)
-			
-			if (updateError) throw updateError
-			
-			// UIを更新
-			students = students.map(s => 
-				s.id === studentId 
-					? { ...s, status: newStatus }
-					: s
-			)
-		} catch (err: any) {
-			alert(`ステータス変更に失敗しました: ${err.message}`)
-		}
+		alert('生徒ステータス変更機能は現在実装中です')
+		// TODO: 生徒ステータス更新APIの実装が必要
 	}
 	
 	async function removeStudent(studentId: string) {
-		if (!confirm('この生徒をスペースから除籍しますか？学習進捗も削除されます。')) {
-			return
-		}
-		
-		try {
-			const { error: deleteError } = await supabase
-				.from('space_students')
-				.delete()
-				.eq('id', studentId)
-			
-			if (deleteError) throw deleteError
-			
-			students = students.filter(s => s.id !== studentId)
-		} catch (err: any) {
-			alert(`除籍に失敗しました: ${err.message}`)
-		}
+		alert('生徒除籍機能は現在実装中です')
+		// TODO: 生徒除籍APIの実装が必要
 	}
 	
 	async function inviteStudent() {

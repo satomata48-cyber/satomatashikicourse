@@ -2,50 +2,30 @@
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
 	import { goto } from '$app/navigation'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	let loading = true
 	let error = ''
 	let course: any = null
 	let sessionId = ''
 	let courseId = ''
-	
+
 	$: sessionId = $page.url.searchParams.get('session_id') || ''
 	$: courseId = $page.url.searchParams.get('course_id') || ''
-	
+
 	onMount(async () => {
 		if (!sessionId || !courseId) {
 			error = '無効なアクセスです'
 			loading = false
 			return
 		}
-		
+
 		await loadPurchaseInfo()
 	})
-	
+
 	async function loadPurchaseInfo() {
 		try {
-			// コース情報を取得
-			const { data: courseData, error: courseError } = await supabase
-				.from('courses')
-				.select(`
-					*,
-					space:spaces!inner(
-						title,
-						slug,
-						instructor_id,
-						profiles:profiles!inner(username)
-					)
-				`)
-				.eq('id', courseId)
-				.single()
-			
-			if (courseError) throw courseError
-			
-			course = courseData
-			
+			// TODO: D1実装が必要 - コース情報の取得
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			error = err.message
 			console.error('Load purchase info error:', err)
@@ -53,7 +33,7 @@
 			loading = false
 		}
 	}
-	
+
 	function goToCourse() {
 		if (course) {
 			const username = course.space.profiles.username
@@ -61,7 +41,7 @@
 			goto(`/${username}/space/${spaceSlug}/student/course/${courseId}`)
 		}
 	}
-	
+
 	function goToSpace() {
 		if (course) {
 			const username = course.space.profiles.username
@@ -88,7 +68,10 @@
 					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4m0 4h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
 				</svg>
 				<h3 class="text-lg font-medium text-red-800 mb-2">エラーが発生しました</h3>
-				<p class="text-red-600">{error}</p>
+				<p class="text-red-600 mb-4">{error}</p>
+				<a href="/" class="text-sm text-blue-600 hover:text-blue-800 underline">
+					トップページに戻る
+				</a>
 			</div>
 		{:else if course}
 			<div class="bg-white rounded-lg shadow-lg overflow-hidden">

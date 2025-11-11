@@ -2,18 +2,13 @@
 	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: spaceIdParam = $page.url.searchParams.get('space_id')
 	
 	let spaces: any[] = []
-	let instructorId: string | null = null
-	let redirecting = false
 	let formData = {
 		spaceId: spaceIdParam || '',
 		title: '',
@@ -28,80 +23,23 @@
 	let error = ''
 	let slugError = ''
 	let themeColor = '#3B82F6' // デフォルト
-	
-	// リアクティブ文でリダイレクト処理
-	$: if (username === 'undefined' && !redirecting) {
-		redirecting = true
-		handleUndefinedUsername()
-	}
-	
-	async function handleUndefinedUsername() {
-		try {
-			const { data: { user } } = await supabase.auth.getUser()
-			if (user) {
-				const { data: profileData } = await supabase
-					.from('profiles')
-					.select('username')
-					.eq('id', user.id)
-					.single()
-				
-				if (profileData?.username) {
-					goto(`/${profileData.username}/courses/create`)
-					return
-				} else {
-					goto('/profile/setup')
-					return
-				}
-			} else {
-				goto('/login')
-				return
-			}
-		} catch (err) {
-			console.error('Redirect error:', err)
-			goto('/login')
-		}
-	}
-	
+
 	onMount(async () => {
-		if (username !== 'undefined') {
-			await loadInstructorData()
-			await loadSpaces()
-		}
+		await loadSpaces()
 	})
-	
-	async function loadInstructorData() {
-		try {
-			// usernameからinstructor_idを取得
-			const { data: profileData, error: profileError } = await supabase
-				.from('profiles')
-				.select('id')
-				.eq('username', username)
-				.single()
-			
-			if (profileError || !profileData) {
-				throw new Error('講師が見つかりません')
-			}
-			
-			instructorId = profileData.id
-		} catch (err: any) {
-			error = err.message
-			console.error('Load instructor data error:', err)
-		}
-	}
-	
+
 	async function loadSpaces() {
 		try {
-			if (!instructorId) return
-			
-			const { data: spacesData, error: spacesError } = await supabase
-				.from('spaces')
-				.select('id, title, slug, landing_page_content')
-				.eq('instructor_id', instructorId)
-				.order('title', { ascending: true })
+			// API からスペース一覧を取得
+			const response = await fetch(`/api/spaces?username=${username}`)
+			const result = await response.json()
 
-			if (spacesError) throw spacesError
-			spaces = spacesData || []
-			
+			if (!response.ok) {
+				throw new Error(result.error || 'スペースの取得に失敗しました')
+			}
+
+			spaces = result.spaces || []
+
 			// URLパラメータのspace_idが有効か確認
 			if (spaceIdParam && !spaces.some(s => s.id === spaceIdParam)) {
 				formData.spaceId = ''
@@ -142,29 +80,12 @@
 			slugError = 'スラッグは必須です'
 			return false
 		}
-		
+
 		if (!/^[a-zA-Z0-9_-]+$/.test(formData.slug)) {
 			slugError = 'スラッグは英数字、アンダースコア、ハイフンのみ使用可能です'
 			return false
 		}
-		
-		if (!formData.spaceId) {
-			slugError = ''
-			return true
-		}
-		
-		// 同一スペース内での重複チェック
-		const { data: existingCourses } = await supabase
-			.from('courses')
-			.select('id')
-			.eq('space_id', formData.spaceId)
-			.eq('slug', formData.slug)
 
-		if (existingCourses && existingCourses.length > 0) {
-			slugError = 'このスラッグは既に使用されています'
-			return false
-		}
-		
 		slugError = ''
 		return true
 	}
@@ -331,21 +252,26 @@
 				// TODO: Stripe Price作成ロジック
 			}
 			
-			console.log('Course data to insert:', courseData)
-			
-			const { data: course, error: createError } = await supabase
-				.from('courses')
-				.insert(courseData)
-				.select()
-				.single()
-			
-			console.log('Insert result:', { course, createError })
-			
-			if (createError) {
-				console.error('Supabase insert error:', createError)
-				throw createError
+			// API でコース作成
+			const response = await fetch('/api/courses', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					space_id: formData.spaceId,
+					title: formData.title,
+					description: formData.description,
+					price: formData.price,
+					is_free: formData.isFree,
+					is_published: formData.isPublished
+				})
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'コースの作成に失敗しました')
 			}
-			
+
 			goto(`/${username}/courses`)
 		} catch (err: any) {
 			error = err.message || 'コース作成に失敗しました'

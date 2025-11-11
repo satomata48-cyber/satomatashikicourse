@@ -2,16 +2,13 @@
 	import { onMount, tick } from 'svelte'
 	import { page } from '$app/stores'
 	import { goto } from '$app/navigation'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: slug = $page.params.slug
 	$: courseId = $page.params.id
-	
+
 	let space: any = null
 	let student: any = null
 	let course: any = null
@@ -22,78 +19,41 @@
 	let currentView = 'overview' // 'overview' | 'lesson'
 	let lessonCompletions: any[] = []
 	let completingLesson = false
-	
+
 	onMount(async () => {
 		await loadCourseData()
 	})
-	
+
 	async function loadCourseData() {
 		try {
-			// スペース情報を取得
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select(`
-					*,
-					instructor:profiles!instructor_id(username, display_name)
-				`)
-				.eq('slug', slug)
-				.single()
-			
-			if (spaceError || !spaceData) {
-				throw new Error('スペースが見つかりません')
+			// courseIdがUUIDかslugかを判定
+			const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)
+
+			let response;
+			if (isUUID) {
+				// UUIDの場合は従来通りID検索
+				response = await fetch(`/api/courses?id=${courseId}`)
+			} else {
+				// slugの場合はslug検索
+				response = await fetch(`/api/courses?username=${username}&space_slug=${slug}&slug=${courseId}`)
 			}
-			
-			space = spaceData
-			
-			// 生徒の登録確認
-			const { data: studentData, error: studentError } = await supabase
-				.from('space_students')
-				.select('*')
-				.eq('student_id', data.user.id)
-				.eq('space_id', space.id)
-				.single()
-			
-			if (studentError || !studentData) {
-				throw new Error('このスペースに登録されていません')
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'コースの取得に失敗しました')
 			}
-			
-			student = studentData
-			
-			// コース情報を取得
-			const { data: courseData, error: courseError } = await supabase
-				.from('courses')
-				.select('*')
-				.eq('id', courseId)
-				.eq('space_id', space.id)
-				.eq('is_published', true)
-				.single()
-			
-			if (courseError || !courseData) {
-				throw new Error('コースが見つかりません')
-			}
-			
-			course = courseData
-			
-			// レッスン一覧を取得
-			const { data: lessonsData, error: lessonsError } = await supabase
-				.from('lessons')
-				.select('*')
-				.eq('course_id', courseId)
-				.eq('is_published', true)
-				.order('order_index', { ascending: true })
-			
-			if (lessonsError) {
-				console.error('Lessons error:', lessonsError)
-				throw lessonsError
-			}
-			
-			lessons = lessonsData || []
-			
+
+			course = result.course
+			space = result.space
+
+			// TODO: レッスン一覧とユーザー情報の取得
+			lessons = []
+			student = null
+
 			// レッスン完了状態を取得
-			if (lessons.length > 0) {
-				await loadLessonCompletions()
-			}
-			
+			await loadLessonCompletions()
+
 		} catch (err: any) {
 			error = err.message || 'データの読み込みに失敗しました'
 			console.error('Load course data error:', err)
@@ -101,134 +61,70 @@
 			loading = false
 		}
 	}
-	
+
 	// レッスン完了状態を取得
 	async function loadLessonCompletions() {
 		try {
-			console.log('Loading lesson completions...')
-			const lessonIds = lessons.map(lesson => lesson.id)
-			console.log('Lesson IDs:', lessonIds)
-			console.log('User ID:', data.user.id)
-			
-			const { data: completionsData, error } = await supabase
-				.from('lesson_completions')
-				.select('lesson_id, completed_at')
-				.eq('student_id', data.user.id)
-				.in('lesson_id', lessonIds)
-			
-			if (error) {
-				console.error('Error loading completions:', error)
-				// テーブルが存在しない可能性をチェック
-				if (error.code === '42P01') {
-					console.log('lesson_completions table does not exist!')
-				}
-			} else {
-				console.log('Loaded completions:', completionsData)
-				lessonCompletions = completionsData || []
-				console.log('Completion status for each lesson:')
-				lessons.forEach(lesson => {
-					console.log(`Lesson ${lesson.title}: ${isLessonCompleted(lesson.id) ? 'COMPLETED' : 'NOT COMPLETED'}`)
-				})
-			}
+			// TODO: D1実装が必要 - レッスン完了状態の取得
+			lessonCompletions = []
 		} catch (err) {
 			console.error('Failed to load lesson completions:', err)
 		}
 	}
-	
+
 	// レッスンを選択してウィジェットに表示
 	function selectLesson(lesson: any) {
 		selectedLesson = lesson
 		currentView = 'lesson'
 	}
-	
+
 	// 概要表示に戻る
 	function showOverview() {
 		selectedLesson = null
 		currentView = 'overview'
 	}
-	
+
 	// コース一覧に戻る
 	function backToCourses() {
 		const instructorUsername = space?.instructor?.username || username
 		goto(`/${instructorUsername}/space/${slug}/student/courses`)
 	}
-	
+
 	// YouTube URLを埋め込み用URLに変換
 	function getYouTubeEmbedUrl(url: string): string {
 		if (!url) return ''
-		
+
 		// YouTube URLのパターンをチェック
 		const youtubeRegex = /(?:youtube\.com\/watch\?v=|youtu\.be\/|youtube\.com\/embed\/)([a-zA-Z0-9_-]{11})/
 		const match = url.match(youtubeRegex)
-		
+
 		if (match && match[1]) {
 			return `https://www.youtube.com/embed/${match[1]}`
 		}
-		
+
 		return url // YouTube以外のURLはそのまま返す
 	}
-	
+
 	// レッスンが完了済みかチェック
 	function isLessonCompleted(lessonId: string): boolean {
 		return lessonCompletions.some(completion => completion.lesson_id === lessonId)
 	}
-	
+
 	// レッスンを完了として記録
 	async function completeLesson() {
-		console.log('completeLesson called:', {
-			selectedLesson: selectedLesson?.id,
-			completingLesson,
-			isCompleted: selectedLesson ? isLessonCompleted(selectedLesson.id) : false,
-			lessonCompletions
-		})
-		
 		if (!selectedLesson || completingLesson || isLessonCompleted(selectedLesson.id)) {
-			console.log('Early return from completeLesson - no lesson, already processing, or already completed')
 			return
 		}
-		
+
 		completingLesson = true
-		console.log('Starting lesson completion...')
 		try {
-			// 楽観的更新を先に実行（Svelteの反応性を強制トリガー）
-			const newCompletion = {
-				lesson_id: selectedLesson.id,
-				completed_at: new Date().toISOString()
-			}
-			// 新しい配列を作成してSvelteの反応性をトリガー
-			lessonCompletions = [...lessonCompletions, newCompletion]
-			// DOM更新を待つ
-			await tick()
-			console.log('Optimistically updated UI, lesson now completed:', isLessonCompleted(selectedLesson.id))
-			console.log('Current lessonCompletions:', lessonCompletions)
-			
-			// データベースに保存
-			const { error } = await supabase
-				.from('lesson_completions')
-				.upsert({
-					lesson_id: selectedLesson.id,
-					student_id: data.user.id,
-					completed_at: new Date().toISOString()
-				})
-			
-			if (error) {
-				// エラーの場合は楽観的更新を元に戻す
-				lessonCompletions = lessonCompletions.filter(
-					completion => completion.lesson_id !== selectedLesson.id
-				)
-				throw error
-			}
-			
-			console.log('Successfully saved to database')
-			
+			// TODO: D1実装が必要 - レッスン完了の記録
+			alert('この機能は現在実装中です')
 		} catch (err) {
 			console.error('Failed to complete lesson:', err)
 			alert('レッスン完了の記録に失敗しました')
-			// エラーの場合は状態を再読み込み
-			await loadLessonCompletions()
 		} finally {
 			completingLesson = false
-			console.log('Final state - completingLesson:', completingLesson, 'isCompleted:', isLessonCompleted(selectedLesson?.id))
 		}
 	}
 </script>
@@ -253,7 +149,10 @@
 		</div>
 	{:else if error}
 		<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-			{error}
+			<p>{error}</p>
+			<a href="/{username}/space/{slug}/student/courses" class="text-sm underline mt-2 inline-block">
+				コース一覧に戻る
+			</a>
 		</div>
 	{:else if course}
 		<!-- ヘッダー -->

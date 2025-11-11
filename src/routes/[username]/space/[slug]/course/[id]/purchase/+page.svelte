@@ -2,17 +2,14 @@
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
 	import { goto } from '$app/navigation'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
 	import { createCheckoutSession } from '$lib/stripe'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: slug = $page.params.slug
 	$: courseId = $page.params.id
-	
+
 	let course: any = null
 	let space: any = null
 	let user: any = null
@@ -20,61 +17,38 @@
 	let purchasing = false
 	let error = ''
 	let alreadyPurchased = false
-	
+
 	onMount(async () => {
 		await loadCourseData()
 	})
-	
+
 	async function loadCourseData() {
 		try {
-			// ユーザー情報を取得
-			const { data: { user: currentUser }, error: authError } = await supabase.auth.getUser()
-			console.log('Purchase page - Auth check:', { currentUser, authError })
-			user = currentUser
-			
-			// コース情報を取得
-			const { data: courseData, error: courseError } = await supabase
-				.from('courses')
-				.select(`
-					*,
-					space:spaces!inner(
-						id,
-						instructor_id,
-						title,
-						slug,
-						description
-					)
-				`)
-				.eq('id', courseId)
-				.single()
-			
-			if (courseError) throw courseError
-			if (!courseData) throw new Error('コースが見つかりません')
-			
-			course = courseData
-			space = courseData.space
-			
-			// 講師本人かチェック
-			if (user && space.instructor_id === user.id) {
-				error = '講師は自分のコースを購入できません'
-				return
+			// courseIdがUUIDかslugかを判定
+			const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)
+
+			let response;
+			if (isUUID) {
+				// UUIDの場合は従来通りID検索
+				response = await fetch(`/api/courses?id=${courseId}`)
+			} else {
+				// slugの場合はslug検索
+				response = await fetch(`/api/courses?username=${username}&space_slug=${slug}&slug=${courseId}`)
 			}
-			
-			// 既に購入済みかチェック
-			if (user) {
-				const { data: purchase } = await supabase
-					.from('course_purchases')
-					.select('*')
-					.eq('course_id', courseId)
-					.eq('student_id', user.id)
-					.eq('status', 'completed')
-					.single()
-				
-				if (purchase) {
-					alreadyPurchased = true
-				}
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'コースの取得に失敗しました')
 			}
-			
+
+			course = result.course
+			space = result.space
+
+			// TODO: ユーザーログイン状態と購入状態の確認
+			user = null
+			alreadyPurchased = false
+
 		} catch (err: any) {
 			error = err.message
 			console.error('Load course error:', err)
@@ -82,7 +56,7 @@
 			loading = false
 		}
 	}
-	
+
 	async function handlePurchase() {
 		console.log('handlePurchase called - user:', user)
 		if (!user) {
@@ -96,20 +70,13 @@
 			error = 'この商品は現在購入できません'
 			return
 		}
-		
+
 		purchasing = true
 		error = ''
 
 		try {
-			// 認証トークンを取得
-			const { data: { session } } = await supabase.auth.getSession()
-			const accessToken = session?.access_token
-
-			const { sessionUrl } = await createCheckoutSession(courseId, course.stripe_price_id, accessToken)
-			
-			// Stripe Checkoutページへリダイレクト
-			window.location.href = sessionUrl
-			
+			// TODO: D1実装が必要 - Stripe決済処理
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			error = `購入エラー: ${err.message}`
 			purchasing = false

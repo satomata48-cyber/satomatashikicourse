@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
 	import { onMount } from 'svelte'
-	
-	const supabase = createSupabaseBrowserClient()
 	
 	let username = ''
 	let displayName = ''
@@ -12,29 +9,8 @@
 	let user: any = null
 	
 	onMount(async () => {
-		const { data: { user: currentUser } } = await supabase.auth.getUser()
-		if (!currentUser) {
-			goto('/login')
-			return
-		}
-		user = currentUser
-		
-		// 既存のprofileデータがあるか確認
-		const { data: profile } = await supabase
-			.from('profiles')
-			.select('*')
-			.eq('id', currentUser.id)
-			.single()
-		
-		if (profile?.username) {
-			// 既にusernameが設定済みの場合はダッシュボードにリダイレクト
-			goto(`/${profile.username}/dashboard`)
-			return
-		}
-		
-		if (profile?.display_name) {
-			displayName = profile.display_name
-		}
+		// TODO: D1実装が必要 - ユーザー認証とプロフィール確認
+		error = 'この機能は現在実装中です。D1データベースへの移行が必要です。'
 	})
 	
 	async function handleSubmit() {
@@ -42,43 +18,10 @@
 			error = 'すべての項目を入力してください'
 			return
 		}
-		
+
 		loading = true
-		error = ''
-		
-		try {
-			// username重複チェック
-			const { data: existingUser } = await supabase
-				.from('profiles')
-				.select('id')
-				.eq('username', username)
-				.single()
-			
-			if (existingUser) {
-				throw new Error('このユーザーネームは既に使用されています')
-			}
-			
-			// profilesテーブルを更新
-			const { error: updateError } = await supabase
-				.from('profiles')
-				.upsert({
-					id: user.id,
-					email: user.email,
-					display_name: displayName,
-					username: username,
-					role: 'student' // デフォルトは生徒
-				})
-			
-			if (updateError) throw updateError
-			
-			// ダッシュボードにリダイレクト
-			goto(`/${username}/dashboard`)
-		} catch (err: any) {
-			error = err.message
-			console.error('Profile setup error:', err)
-		} finally {
-			loading = false
-		}
+		error = 'この機能は現在実装中です。D1データベースへの移行が必要です。'
+		loading = false
 	}
 </script>
 

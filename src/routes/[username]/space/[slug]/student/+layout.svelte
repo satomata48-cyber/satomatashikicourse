@@ -2,20 +2,17 @@
 	import { page } from '$app/stores'
 	import { goto } from '$app/navigation'
 	import { onMount } from 'svelte'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: slug = $page.params.slug
 	$: currentPath = $page.url.pathname
-	
+
 	let space: any = null
 	let student: any = null
 	let loading = true
-	
+
 	// menuItemsをリアクティブにして、spaceデータが読み込まれたら正しいusernameを使用
 	$: menuItems = space ? [
 		{ label: 'ダッシュボード', href: `/${space.instructor.username}/space/${slug}/student`, icon: 'dashboard' },
@@ -26,65 +23,15 @@
 		{ label: 'コース一覧', href: `/${username}/space/${slug}/student/courses`, icon: 'courses' },
 		{ label: 'プロフィール', href: `/${username}/space/${slug}/student/profile`, icon: 'profile' }
 	]
-	
+
 	onMount(async () => {
 		await loadData()
 	})
-	
+
 	async function loadData() {
 		try {
-			// まずスペース情報をslugから取得
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select(`
-					*,
-					instructor:profiles!instructor_id(username, display_name)
-				`)
-				.eq('slug', slug)
-				.single()
-			
-			if (spaceError || !spaceData) {
-				console.error('Space not found:', spaceError)
-				goto('/')
-				return
-			}
-			
-			space = spaceData
-			
-			// 生徒がこのスペースに登録されているか確認
-			const { data: studentData, error: studentError } = await supabase
-				.from('space_students')
-				.select('*')
-				.eq('student_id', data.user.id)
-				.eq('space_id', space.id)
-				.single()
-			
-			if (studentError || !studentData) {
-				// 登録されていない場合は登録ページにリダイレクト
-				console.log('Student not enrolled, redirecting to enroll page')
-				goto(`/${space.instructor.username}/space/${slug}/enroll`)
-				return
-			}
-			
-			student = studentData
-			
-			// URLのusernameが正しいかチェック
-			if (username && username !== 'undefined' && space.instructor.username !== username) {
-				// 正しいURLにリダイレクト
-				console.log('Correcting username in URL')
-				goto(`/${space.instructor.username}/space/${slug}/student`)
-				return
-			}
-			
-			// アクティブでない場合の処理
-			if (student.status !== 'active') {
-				if (student.status === 'suspended') {
-					alert('アカウントが停止されています。講師にお問い合わせください。')
-				} else if (student.status === 'completed') {
-					// 修了済みでもアクセス可能
-				}
-			}
-			
+			// TODO: D1実装が必要 - スペース情報と生徒登録状態の取得
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			console.error('Load data error:', err)
 			goto(`/${username}/space/${slug}`)
@@ -92,19 +39,17 @@
 			loading = false
 		}
 	}
-	
+
 	function isActive(href: string): boolean {
 		if (href.endsWith('/student') && currentPath.endsWith('/student')) {
 			return true
 		}
 		return currentPath.startsWith(href) && !currentPath.endsWith('/student')
 	}
-	
+
 	async function handleLogout() {
 		try {
-			const { error } = await supabase.auth.signOut()
-			if (error) throw error
-			// spaceデータがある場合は正しいusernameを使用
+			// TODO: D1実装が必要 - ログアウト処理
 			const instructorUsername = space ? space.instructor.username : username
 			goto(`/${instructorUsername}/space/${slug}`)
 		} catch (err: any) {

@@ -2,16 +2,14 @@
 	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: courseId = $page.params.id
-	
+
 	let course: any = null
+	let space: any = null
 	let formData = {
 		title: '',
 		description: '',
@@ -31,101 +29,34 @@
 	onMount(async () => {
 		await loadCourse()
 	})
-	
+
 	async function loadCourse() {
 		try {
-			// 現在のユーザーを取得
-			const { data: { user } } = await supabase.auth.getUser()
-			
-			if (!user) {
-				error = 'ログインが必要です'
-				goto('/login')
-				return
-			}
-			
-			// courseIdがUUIDかslugかを判定
-			const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)
+			// APIからコース情報を取得
+			const response = await fetch(`/api/courses?id=${courseId}`)
+			const result = await response.json()
 
-			let courseQuery = supabase
-				.from('courses')
-				.select(`
-					*,
-					space:spaces!inner(instructor_id, title, slug)
-				`)
-
-			if (isUUID) {
-				courseQuery = courseQuery.eq('id', courseId)
-			} else {
-				courseQuery = courseQuery.eq('slug', courseId)
+			if (!response.ok) {
+				throw new Error(result.error || 'コースの取得に失敗しました')
 			}
 
-			const { data: courseData, error: courseError } = await courseQuery.single()
+			course = result.course
+			space = result.space
 
-			if (courseError) throw courseError
-			if (!courseData) throw new Error('コースが見つかりません')
-			
-			// URLのユーザー名を確認（ユーザー名が自分のものか確認）
-			const { data: profileData, error: profileError } = await supabase
-				.from('profiles')
-				.select('id, username')
-				.eq('username', username)
-				.single()
-			
-			if (profileError || !profileData) {
-				console.error('Profile lookup error:', profileError)
-				goto('/login')
-				return
-			}
-			
-			// URLのユーザー名が自分のものでない場合は、何もしない（他人のコースを見ているだけかもしれない）
-			// 権限チェックは後で行う
-			
-			// 講師の権限チェック
-			if (courseData.space.instructor_id !== user.id) {
-				console.log('Permission check failed:', {
-					instructor_id: courseData.space.instructor_id,
-					user_id: user.id,
-					course_title: courseData.title,
-					space_title: courseData.space.title
-				})
-				error = 'このコースを編集する権限がありません'
-				// エラーを表示して、3秒後にリダイレクト
-				setTimeout(async () => {
-					const { data: myProfile } = await supabase
-						.from('profiles')
-						.select('username')
-						.eq('id', user.id)
-						.single()
-					
-					if (myProfile?.username) {
-						goto(`/${myProfile.username}/courses`)
-					} else {
-						goto('/login')
-					}
-				}, 3000)
-				return
-			}
-			
-			course = courseData
 			formData = {
 				title: course.title,
 				description: course.description || '',
 				slug: course.slug,
-				isFree: course.is_free,
-				price: course.price,
-				currency: course.currency,
-				isPublished: course.is_published
+				isFree: course.is_free ? true : false,
+				price: course.price || 0,
+				currency: course.currency || 'JPY',
+				isPublished: course.is_published ? true : false
 			}
 
 			// スペースのテーマカラーを取得
-			const { data: spaceData } = await supabase
-				.from('spaces')
-				.select('landing_page_content')
-				.eq('id', course.space_id)
-				.single()
-
-			if (spaceData?.landing_page_content?.theme?.primaryColor) {
-				themeColor = spaceData.landing_page_content.theme.primaryColor
+			if (space?.landing_page_content?.theme?.primaryColor) {
+				const color = space.landing_page_content.theme.primaryColor
+				themeColor = (color && color.trim() !== '') ? color : '#3B82F6'
 			}
 		} catch (err: any) {
 			error = err.message
@@ -135,79 +66,32 @@
 		}
 	}
 
-	async function validateSlug() {
-		if (!formData.slug) {
-			slugError = 'スラッグは必須です'
-			return false
-		}
-		
-		if (!/^[a-zA-Z0-9_-]+$/.test(formData.slug)) {
-			slugError = 'スラッグは英数字、アンダースコア、ハイフンのみ使用可能です'
-			return false
-		}
-		
-		// 元のスラッグと同じ場合はOK
-		if (formData.slug === course?.slug) {
-			slugError = ''
-			return true
-		}
-		
-		// 同一スペース内での重複チェック
-		const { data: existingCourses } = await supabase
-			.from('courses')
-			.select('id')
-			.eq('space_id', course.space_id)
-			.eq('slug', formData.slug)
-			.neq('id', courseId)
-
-		if (existingCourses && existingCourses.length > 0) {
-			slugError = 'このスラッグは既に使用されています'
-			return false
-		}
-		
-		slugError = ''
-		return true
-	}
-	
 	async function handleSave() {
 		saving = true
 		error = ''
 		successMessage = ''
 
 		try {
-			// slugは編集できないため、バリデーションをスキップ
-
-			// course_page_contentを更新（セクションは空、メタデータのみ）
-			const updatedCoursePageContent = {
-				sections: [],
-				metadata: {
+			const response = await fetch('/api/courses', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id: course.id,
 					title: formData.title,
-					description: formData.description || `${formData.title}で新しいスキルを習得`,
-					seoTitle: `${formData.title} | オンラインコース`,
-					seoDescription: formData.description || `${formData.title}で新しいスキルを身に付けませんか？`
-				}
+					description: formData.description,
+					is_free: formData.isFree,
+					price: formData.isFree ? 0 : formData.price,
+					currency: formData.currency,
+					is_published: formData.isPublished
+				})
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '保存に失敗しました')
 			}
 
-			const updateData = {
-				title: formData.title,
-				description: formData.description,
-				// slug: formData.slug, // slugは更新しない
-				is_free: formData.isFree,
-				price: formData.isFree ? 0 : formData.price,
-				currency: formData.currency,
-				// estimated_duration_hours: formData.estimatedDurationHours, // このカラムは存在しない
-				is_published: formData.isPublished,
-				course_page_content: updatedCoursePageContent,
-				updated_at: new Date().toISOString()
-			}
-			
-			const { error: updateError } = await supabase
-				.from('courses')
-				.update(updateData)
-				.eq('id', course.id)
-			
-			if (updateError) throw updateError
-			
 			successMessage = 'コースを保存しました'
 			await loadCourse() // 最新データを再読み込み
 		} catch (err: any) {
@@ -221,20 +105,25 @@
 	async function togglePublished() {
 		try {
 			const newStatus = !course.is_published
-			
-			const { error: updateError } = await supabase
-				.from('courses')
-				.update({
-					is_published: newStatus,
-					updated_at: new Date().toISOString()
+
+			const response = await fetch('/api/courses', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id: course.id,
+					is_published: newStatus
 				})
-				.eq('id', course.id)
-			
-			if (updateError) throw updateError
-			
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '公開状態の変更に失敗しました')
+			}
+
 			formData.isPublished = newStatus
 			course.is_published = newStatus
-			
+
 			successMessage = newStatus ? 'コースを公開しました' : 'コースを非公開にしました'
 		} catch (err: any) {
 			error = err.message
@@ -256,7 +145,7 @@
 			<div class="flex items-center justify-between">
 				<div>
 					<h2 class="text-2xl font-bold text-gray-900 mb-2">コース編集</h2>
-					<p class="text-gray-600">スペース: {course.space.title}</p>
+					<p class="text-gray-600">スペース: {space?.title || ''}</p>
 				</div>
 				<div class="flex space-x-3">
 					<button
@@ -268,7 +157,7 @@
 						{course.is_published ? '非公開にする' : '公開する'}
 					</button>
 					<a
-						href="/{username}/courses/{course.slug || courseId}/page-editor"
+						href="/{username}/courses/{courseId}/page-editor"
 						class="text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
 						style="background-color: {themeColor}"
 						title="コース詳細ページのコンテンツを編集"
@@ -276,7 +165,7 @@
 						ページ編集
 					</a>
 					<a
-						href="/{username}/courses/{course.slug || courseId}/lessons"
+						href="/{username}/courses/{courseId}/lessons"
 						class="text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
 						style="background-color: {themeColor}"
 					>

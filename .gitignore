@@ -4,6 +4,13 @@ build/
 .env
 .env.local
 .env.production
+.vercel.env
 .DS_Store
 *.log
 .vercel/
+
+# Cloudflare
+.dev.vars
+.wrangler/
+wrangler.toml.backup
+nul

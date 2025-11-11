@@ -3,20 +3,17 @@ import type { RequestHandler } from './$types';
 
 export const GET: RequestHandler = async ({ locals }) => {
 	try {
-		// locals から認証情報を取得
+		// TODO: D1実装が必要 - locals から認証情報を取得
 		const user = locals.user;
-		const supabase = locals.supabase;
 
 		if (!user) {
 			throw redirect(302, '/login?error=authentication_required');
 		}
 
-		// プロフィールを取得
-		const { data: profile } = await supabase
-			.from('profiles')
-			.select('username')
-			.eq('id', user.id)
-			.single();
+		// TODO: D1実装が必要 - プロフィールを取得
+		const profile = {
+			username: 'stub-user'
+		};
 
 		// リフレッシュが必要な場合は決済設定ページに戻す
 		const errorMessage = 'オンボーディングを完了できませんでした。もう一度お試しください。';

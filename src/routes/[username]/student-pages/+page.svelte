@@ -1,11 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
 
 	export let data
-
-	const supabase = createSupabaseBrowserClient()
 
 	$: username = $page.params.username
 
@@ -23,30 +20,20 @@
 	async function loadSpaces() {
 		loading = true
 		try {
-			const { data: { user } } = await supabase.auth.getUser()
-			if (!user) {
-				error = 'ログインが必要です'
+			if (!username) {
+				error = 'ユーザー名が必要です'
 				return
 			}
 
-			const { data: spacesData, error: spacesError } = await supabase
-				.from('spaces')
-				.select(`
-					id,
-					title,
-					description,
-					slug,
-					is_active,
-					landing_page_content,
-					created_at,
-					_count_courses:courses(count)
-				`)
-				.eq('instructor_id', user.id)
-				.order('created_at', { ascending: false })
+			// APIからスペース情報を取得
+			const response = await fetch(`/api/spaces?username=${username}`)
+			const result = await response.json()
 
-			if (spacesError) throw spacesError
+			if (!response.ok) {
+				throw new Error(result.error || 'スペースの取得に失敗しました')
+			}
 
-			spaces = spacesData || []
+			spaces = result.spaces || []
 		} catch (err: any) {
 			error = err.message
 			console.error('Load spaces error:', err)
@@ -133,7 +120,7 @@
 		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
 			{#each spaces as space}
 				{@const primaryColor = space.landing_page_content?.theme?.primaryColor || '#3B82F6'}
-				{@const courseCount = space._count_courses?.[0]?.count || 0}
+				{@const courseCount = space.course_count || 0}
 
 				<div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden">
 					<!-- ヘッダー -->

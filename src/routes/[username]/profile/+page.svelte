@@ -1,11 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
 
 	export let data
-
-	const supabase = createSupabaseBrowserClient()
 
 	$: username = $page.params.username
 
@@ -38,32 +35,8 @@
 
 	async function loadProfile() {
 		try {
-			const { data: profileData, error: profileError } = await supabase
-				.from('profiles')
-				.select('*')
-				.eq('id', data.user.id)
-				.single()
-
-			if (profileError) throw profileError
-
-			profile = profileData
-			displayName = profileData.display_name || ''
-			bio = profileData.bio || ''
-			avatarUrl = profileData.avatar_url || ''
-			avatarPreview = avatarUrl
-
-			// social_linksがJSONBなのでパース
-			if (profileData.social_links) {
-				socialLinks = {
-					twitter: profileData.social_links.twitter || '',
-					facebook: profileData.social_links.facebook || '',
-					instagram: profileData.social_links.instagram || '',
-					linkedin: profileData.social_links.linkedin || '',
-					youtube: profileData.social_links.youtube || '',
-					website: profileData.social_links.website || ''
-				}
-			}
-
+			// TODO: D1実装が必要 - プロフィール情報の取得
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			error = err.message
 			console.error('Load profile error:', err)
@@ -101,27 +74,8 @@
 			}
 			reader.readAsDataURL(file)
 
-			// Supabase Storageにアップロード
-			const fileExt = file.name.split('.').pop()
-			const fileName = `${data.user.id}-${Date.now()}.${fileExt}`
-			const filePath = fileName
-
-			const { error: uploadError } = await supabase.storage
-				.from('avatars')
-				.upload(filePath, file, {
-					cacheControl: '3600',
-					upsert: false
-				})
-
-			if (uploadError) throw uploadError
-
-			// 公開URLを取得
-			const { data: urlData } = supabase.storage
-				.from('avatars')
-				.getPublicUrl(filePath)
-
-			avatarUrl = urlData.publicUrl
-
+			// TODO: D1実装が必要 - 画像アップロード
+			throw new Error('画像アップロード機能は現在実装中です')
 		} catch (err: any) {
 			error = `アップロードエラー: ${err.message}`
 			console.error('Avatar upload error:', err)
@@ -142,27 +96,8 @@
 				return
 			}
 
-			// プロフィール更新
-			const { error: updateError } = await supabase
-				.from('profiles')
-				.update({
-					display_name: displayName.trim(),
-					bio: bio.trim(),
-					avatar_url: avatarUrl,
-					social_links: socialLinks,
-					updated_at: new Date().toISOString()
-				})
-				.eq('id', data.user.id)
-
-			if (updateError) throw updateError
-
-			successMessage = 'プロフィールを更新しました'
-
-			// 成功メッセージを3秒後に消す
-			setTimeout(() => {
-				successMessage = ''
-			}, 3000)
-
+			// TODO: D1実装が必要 - プロフィール更新
+			throw new Error('この機能は現在実装中です')
 		} catch (err: any) {
 			error = `保存エラー: ${err.message}`
 			console.error('Save profile error:', err)
@@ -194,7 +129,10 @@
 				<!-- エラーメッセージ -->
 				{#if error}
 					<div class="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-lg">
-						{error}
+						<p>{error}</p>
+						<a href="/{username}/dashboard" class="text-sm underline mt-2 inline-block">
+							ダッシュボードに戻る
+						</a>
 					</div>
 				{/if}
 

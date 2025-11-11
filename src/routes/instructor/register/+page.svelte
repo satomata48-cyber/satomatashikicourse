@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	let email = ''
 	let password = ''
 	let displayName = ''
@@ -13,67 +10,38 @@
 	let error = ''
 	let success = false
 	let message = ''
-	
+
 	async function handleRegister() {
 		loading = true
 		error = ''
-		
+
 		try {
-			// usernameの重複チェック（エラーハンドリングを改善）
-			const { data: existingUser, error: checkError } = await supabase
-				.from('profiles')
-				.select('id')
-				.eq('username', username)
-				.maybeSingle() // single() ではなく maybeSingle() を使用
-			
-			// 権限エラーの場合は警告のみ表示して続行
-			if (checkError && !checkError.message.includes('PGRST116')) {
-				console.warn('Username check failed:', checkError)
-				// 重複チェックができない場合は警告して続行
-			}
-			
-			if (existingUser) {
-				throw new Error('このユーザーネームは既に使用されています')
-			}
-			
-			// メール確認付きサインアップ
-			const { data: authData, error: authError } = await supabase.auth.signUp({
-				email,
-				password,
-				options: {
-					data: {
-						display_name: displayName,
-						username: username,
-						role: 'instructor',
-						bio: bio
-					},
-					emailRedirectTo: `${window.location.origin}/auth/callback`
-				}
+			// 講師として登録
+			const response = await fetch('/api/auth/register', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					email,
+					password,
+					username,
+					role: 'instructor'
+				})
 			})
-			
-			if (authError) {
-				console.error('Auth error:', authError)
-				throw authError
+
+			const data = await response.json()
+
+			if (!response.ok) {
+				throw new Error(data.error || '登録に失敗しました')
 			}
-			
-			console.log('SignUp response:', authData)
-			console.log('User created:', authData.user)
-			console.log('Session:', authData.session)
-			
-			if (authData.user && !authData.user.email_confirmed_at) {
-				// メール確認が必要
-				success = true
-				message = `登録申請を送信しました。${email} に送信された確認メールをクリックして、アカウントを有効化してください。`
-				error = ''
-				console.log('Email confirmation required for user:', authData.user.id)
-			} else if (authData.user && authData.user.email_confirmed_at) {
-				// 即座に確認された場合（テスト環境など）
-				console.log('Email already confirmed, redirecting...')
-				goto(`/${username}/dashboard`)
-			} else {
-				console.log('No user in response:', authData)
-				throw new Error('ユーザー作成に失敗しました')
-			}
+
+			// 登録成功
+			success = true
+			message = '講師として登録されました。ログインしてください。'
+
+			// 2秒後にログインページへリダイレクト
+			setTimeout(() => {
+				goto('/login')
+			}, 2000)
 		} catch (err: any) {
 			console.error('Registration error:', err)
 			error = err.message || '登録中にエラーが発生しました'
@@ -97,7 +65,7 @@
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
 						</svg>
 						<div>
-							<p class="font-medium">メール確認が必要です</p>
+							<p class="font-medium">登録完了！</p>
 							<p class="text-sm mt-1">{message}</p>
 						</div>
 					</div>
@@ -195,7 +163,7 @@
 					disabled={loading || success}
 					class="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
 				>
-					{loading ? '登録中...' : success ? 'メール送信完了' : '講師として登録'}
+					{loading ? '登録中...' : success ? '登録完了' : '講師として登録'}
 				</button>
 			</form>
 			

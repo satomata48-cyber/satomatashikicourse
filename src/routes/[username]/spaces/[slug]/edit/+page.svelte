@@ -2,12 +2,9 @@
 	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 	$: slug = $page.params.slug
 	
@@ -32,17 +29,16 @@
 	
 	async function loadSpace() {
 		try {
-			const { data: spaceData, error: spaceError } = await supabase
-				.from('spaces')
-				.select('*')
-				.eq('instructor_id', data.user.id)
-				.eq('slug', slug)
-				.single()
-			
-			if (spaceError) throw spaceError
-			if (!spaceData) throw new Error('スペースが見つかりません')
-			
-			space = spaceData
+			const response = await fetch(`/api/spaces?username=${username}&slug=${slug}`)
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'スペースの取得に失敗しました')
+			}
+
+			if (!result.space) throw new Error('スペースが見つかりません')
+
+			space = result.space
 			formData = {
 				title: space.title,
 				description: space.description || '',
@@ -64,32 +60,18 @@
 			slugError = 'スラッグは必須です'
 			return false
 		}
-		
+
 		if (!/^[a-zA-Z0-9_-]+$/.test(formData.slug)) {
 			slugError = 'スラッグは英数字、アンダースコア、ハイフンのみ使用可能です'
 			return false
 		}
-		
+
 		// 元のスラッグと同じ場合はOK
 		if (formData.slug === space?.slug) {
 			slugError = ''
 			return true
 		}
-		
-		// 重複チェック
-		const { data: existingSpace } = await supabase
-			.from('spaces')
-			.select('id')
-			.eq('instructor_id', data.user.id)
-			.eq('slug', formData.slug)
-			.neq('id', space.id)
-			.single()
-		
-		if (existingSpace) {
-			slugError = 'このスラッグは既に使用されています'
-			return false
-		}
-		
+
 		slugError = ''
 		return true
 	}
@@ -98,40 +80,43 @@
 		saving = true
 		error = ''
 		successMessage = ''
-		
+
 		try {
 			const isValidSlug = await validateSlug()
 			if (!isValidSlug) {
 				saving = false
 				return
 			}
-			
-			const updateData = {
-				title: formData.title,
-				description: formData.description,
-				slug: formData.slug,
-				max_students: formData.maxStudents,
-				is_active: formData.isActive,
-				is_public: formData.isPublic,
-				updated_at: new Date().toISOString()
+
+			const response = await fetch('/api/spaces', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id: space.id,
+					title: formData.title,
+					description: formData.description,
+					slug: formData.slug,
+					max_students: formData.maxStudents,
+					is_active: formData.isActive,
+					is_public: formData.isPublic
+				})
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'スペースの更新に失敗しました')
 			}
-			
-			const { error: updateError } = await supabase
-				.from('spaces')
-				.update(updateData)
-				.eq('id', space.id)
-			
-			if (updateError) throw updateError
-			
+
 			successMessage = 'スペースを保存しました'
-			
+
 			// URLが変更された場合はリダイレクト
 			if (formData.slug !== space.slug) {
 				setTimeout(() => {
 					goto(`/${username}/spaces/${formData.slug}/edit`)
 				}, 1500)
 			}
-			
+
 			await loadSpace() // 最新データを再読み込み
 		} catch (err: any) {
 			error = err.message
@@ -144,20 +129,25 @@
 	async function toggleActive() {
 		try {
 			const newStatus = !space.is_active
-			
-			const { error: updateError } = await supabase
-				.from('spaces')
-				.update({ 
-					is_active: newStatus,
-					updated_at: new Date().toISOString()
+
+			const response = await fetch('/api/spaces', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id: space.id,
+					is_active: newStatus
 				})
-				.eq('id', space.id)
-			
-			if (updateError) throw updateError
-			
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'ステータスの更新に失敗しました')
+			}
+
 			formData.isActive = newStatus
 			space.is_active = newStatus
-			
+
 			successMessage = newStatus ? 'スペースをアクティブにしました' : 'スペースを非アクティブにしました'
 		} catch (err: any) {
 			error = err.message

@@ -2,12 +2,9 @@
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
 	import { goto } from '$app/navigation'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
-	
+
 	export let data
-	
-	const supabase = createSupabaseBrowserClient()
-	
+
 	$: username = $page.params.username
 
 	let stats = {
@@ -19,96 +16,41 @@
 
 	let recentActivities: any[] = []
 	let loading = true
-	let redirecting = false
 	let initialized = false
 
-	// UUIDが渡された場合のリダイレクト処理
-	$: if (username && username !== 'undefined' && !redirecting) {
-		const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
-		if (isUUID) {
-			redirecting = true
-			handleUuidUsername()
-		}
-	}
-
-	async function handleUuidUsername() {
-		try {
-			const { data: { user } } = await supabase.auth.getUser()
-			if (user) {
-				const { data: profileData } = await supabase
-					.from('profiles')
-					.select('username')
-					.eq('id', user.id)
-					.single()
-
-				if (profileData?.username) {
-					goto(`/${profileData.username}/dashboard`)
-					return
-				}
-			}
-			goto('/login')
-		} catch (err) {
-			console.error('UUID redirect error:', err)
-			goto('/login')
-		}
-	}
-
-	// usernameが設定されたらデータをロード（UUIDではない場合のみ）
-	$: if (username && username !== 'undefined' && !redirecting) {
-		const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
-		if (!isUUID && !initialized) {
+	onMount(async () => {
+		// usernameが設定されたらデータをロード
+		if (username && username !== 'undefined' && !initialized) {
 			initialized = true
-			loadDashboardData()
+			await loadDashboardData()
 		}
-	}
+	})
 
 	async function loadDashboardData() {
 		try {
-			// usernameが設定されるまで待つ
 			if (!username) {
 				console.error('Username is not set')
 				loading = false
 				return
 			}
 
-			// まずusernameから講師IDを取得
-			const { data: profileData, error: profileError } = await supabase
-				.from('profiles')
-				.select('id')
-				.eq('username', username)
-				.single()
-			
-			if (profileError || !profileData) {
-				console.error('Profile not found:', profileError)
-				loading = false
-				return
+			// API からスペースとコース一覧を取得
+			const response = await fetch(`/api/courses?username=${username}`)
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'データの取得に失敗しました')
 			}
-			
-			const instructorId = profileData.id
-			
-			// スペース数を取得
-			const { count: spacesCount } = await supabase
-				.from('spaces')
-				.select('*', { count: 'exact', head: true })
-				.eq('instructor_id', instructorId)
-			
-			// コース数を取得
-			const { data: spaces } = await supabase
-				.from('spaces')
-				.select('id')
-				.eq('instructor_id', instructorId)
-			
-			if (spaces && spaces.length > 0) {
-				const spaceIds = spaces.map(s => s.id)
-				const { count: coursesCount } = await supabase
-					.from('courses')
-					.select('*', { count: 'exact', head: true })
-					.in('space_id', spaceIds)
-				
-				stats.totalCourses = coursesCount || 0
-			}
-			
-			stats.totalSpaces = spacesCount || 0
+
+			const spaces = result.spaces || []
+			const courses = result.courses || []
+
+			// 統計情報を設定
+			stats.totalSpaces = spaces.length
+			stats.totalCourses = courses.length
+			// TODO: 生徒数と収益は将来実装
+			stats.totalStudents = 0
+			stats.totalRevenue = 0
 			
 		} catch (error) {
 			console.error('Dashboard data loading error:', error)

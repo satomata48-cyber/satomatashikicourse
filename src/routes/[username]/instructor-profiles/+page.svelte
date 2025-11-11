@@ -2,15 +2,12 @@
 	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
 	import { page } from '$app/stores'
-	import { createSupabaseBrowserClient } from '$lib/supabase'
 
 	export let data
 
-	const supabase = createSupabaseBrowserClient()
-
 	$: username = $page.params.username
 
-	let loading = true
+	let loading = false
 	let error = ''
 	let successMessage = ''
 	let instructorProfiles: any[] = []
@@ -27,173 +24,33 @@
 	}
 
 	onMount(async () => {
-		await loadProfiles()
+		// TODO: 複数講師プロフィール機能は現在実装中です
+		// 現在は単一のプロフィールのみサポートしています
+		error = 'この機能は現在実装中です。現在は単一の講師プロフィールのみサポートしています。'
 	})
 
 	async function loadProfiles() {
-		try {
-			loading = true
-			error = ''
-
-			const { data: profilesData, error: profilesError } = await supabase
-				.from('instructor_profiles')
-				.select('*')
-				.eq('user_id', data.user.id)
-				.order('is_primary', { ascending: false })
-				.order('created_at', { ascending: false })
-
-			if (profilesError) throw profilesError
-
-			instructorProfiles = profilesData || []
-
-		} catch (err: any) {
-			error = `読み込みエラー: ${err.message}`
-			console.error('Load profiles error:', err)
-		} finally {
-			loading = false
-		}
+		// TODO: 実装が必要
 	}
 
 	async function handleCreateProfile() {
-		try {
-			error = ''
-			successMessage = ''
-
-			// バリデーション
-			if (!newProfile.display_name.trim()) {
-				error = '表示名を入力してください'
-				return
-			}
-			if (!newProfile.username.trim()) {
-				error = 'ユーザー名を入力してください'
-				return
-			}
-
-			// ユーザー名の形式チェック（英数字とハイフン、アンダースコアのみ）
-			if (!/^[a-zA-Z0-9_-]+$/.test(newProfile.username)) {
-				error = 'ユーザー名は英数字、ハイフン、アンダースコアのみ使用できます'
-				return
-			}
-
-			// 新規プロフィール作成
-			const { error: createError } = await supabase
-				.from('instructor_profiles')
-				.insert({
-					user_id: data.user.id,
-					display_name: newProfile.display_name.trim(),
-					username: newProfile.username.trim().toLowerCase(),
-					bio: newProfile.bio.trim(),
-					avatar_url: newProfile.avatar_url.trim(),
-					is_active: true,
-					is_primary: instructorProfiles.length === 0 // 最初のプロフィールは自動的にプライマリ
-				})
-
-			if (createError) {
-				if (createError.code === '23505') {
-					error = 'このユーザー名は既に使用されています'
-				} else {
-					throw createError
-				}
-				return
-			}
-
-			successMessage = '講師プロフィールを作成しました'
-			showCreateModal = false
-			newProfile = { display_name: '', username: '', bio: '', avatar_url: '' }
-			await loadProfiles()
-
-			setTimeout(() => {
-				successMessage = ''
-			}, 3000)
-
-		} catch (err: any) {
-			error = `作成エラー: ${err.message}`
-			console.error('Create profile error:', err)
-		}
+		error = 'この機能は現在実装中です'
 	}
 
 	async function handleSetPrimary(profileId: string) {
-		try {
-			error = ''
-			successMessage = ''
-
-			const { error: updateError } = await supabase
-				.from('instructor_profiles')
-				.update({ is_primary: true })
-				.eq('id', profileId)
-
-			if (updateError) throw updateError
-
-			successMessage = 'プライマリプロフィールを変更しました'
-			await loadProfiles()
-
-			setTimeout(() => {
-				successMessage = ''
-			}, 3000)
-
-		} catch (err: any) {
-			error = `更新エラー: ${err.message}`
-			console.error('Set primary error:', err)
-		}
+		error = 'この機能は現在実装中です'
 	}
 
 	async function handleToggleActive(profileId: string, currentStatus: boolean) {
-		try {
-			error = ''
-			successMessage = ''
-
-			const { error: updateError } = await supabase
-				.from('instructor_profiles')
-				.update({ is_active: !currentStatus })
-				.eq('id', profileId)
-
-			if (updateError) throw updateError
-
-			successMessage = `プロフィールを${!currentStatus ? '有効' : '無効'}にしました`
-			await loadProfiles()
-
-			setTimeout(() => {
-				successMessage = ''
-			}, 3000)
-
-		} catch (err: any) {
-			error = `更新エラー: ${err.message}`
-			console.error('Toggle active error:', err)
-		}
+		error = 'この機能は現在実装中です'
 	}
 
 	function openDeleteModal(profileId: string) {
-		deleteTargetId = profileId
-		showDeleteModal = true
+		error = 'この機能は現在実装中です'
 	}
 
 	async function handleDelete() {
-		if (!deleteTargetId) return
-
-		try {
-			error = ''
-			successMessage = ''
-
-			const { error: deleteError } = await supabase
-				.from('instructor_profiles')
-				.delete()
-				.eq('id', deleteTargetId)
-
-			if (deleteError) throw deleteError
-
-			successMessage = '講師プロフィールを削除しました'
-			showDeleteModal = false
-			deleteTargetId = null
-			await loadProfiles()
-
-			setTimeout(() => {
-				successMessage = ''
-			}, 3000)
-
-		} catch (err: any) {
-			error = `削除エラー: ${err.message}`
-			console.error('Delete profile error:', err)
-		}
+		error = 'この機能は現在実装中です'
 	}
 
 	function goToEdit(profileUsername: string) {
