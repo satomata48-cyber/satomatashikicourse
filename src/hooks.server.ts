@@ -1,6 +1,12 @@
 import type { Handle } from '@sveltejs/kit';
 import { redirect } from '@sveltejs/kit';
-import { SessionManager, ProfileManager, getD1 } from '$lib/server/d1-db';
+import {
+	InstructorSessionManager,
+	StudentSessionManager,
+	InstructorManager,
+	StudentManager,
+	getD1
+} from '$lib/server/d1-db';
 
 export const handle: Handle = async ({ event, resolve }) => {
 	// セッション確認
@@ -9,25 +15,47 @@ export const handle: Handle = async ({ event, resolve }) => {
 	if (sessionToken) {
 		try {
 			// D1データベース取得
-			const db = getD1(event.platform);
+			const db = await getD1(event.platform);
 
-			// セッション取得
-			const session = await SessionManager.getSessionByToken(db, sessionToken);
+			// 講師セッションを確認
+			const instructorSession = await InstructorSessionManager.getSessionByToken(db, sessionToken);
 
-			if (session) {
-				// ユーザー情報取得
-				const user = await ProfileManager.getUserById(db, session.user_id);
+			if (instructorSession) {
+				// 講師ユーザー情報取得
+				const instructor = await InstructorManager.getInstructorById(db, instructorSession.instructor_id as string);
 
-				if (user) {
-					event.locals.user = user;
+				if (instructor) {
+					event.locals.user = {
+						...instructor,
+						userType: 'instructor'
+					};
 					event.locals.session = {
-						token: session.token,
-						expires_at: session.expires_at
+						token: instructorSession.token as string,
+						expires_at: instructorSession.expires_at as number
 					};
 				}
 			} else {
-				// 無効なセッションの場合、クッキー削除
-				event.cookies.delete('session_token', { path: '/' });
+				// 生徒セッションを確認
+				const studentSession = await StudentSessionManager.getSessionByToken(db, sessionToken);
+
+				if (studentSession) {
+					// 生徒ユーザー情報取得
+					const student = await StudentManager.getStudentById(db, studentSession.student_id as string);
+
+					if (student) {
+						event.locals.user = {
+							...student,
+							userType: 'student'
+						};
+						event.locals.session = {
+							token: studentSession.token as string,
+							expires_at: studentSession.expires_at as number
+						};
+					}
+				} else {
+					// 無効なセッションの場合、クッキー削除
+					event.cookies.delete('session_token', { path: '/' });
+				}
 			}
 		} catch (error) {
 			console.error('Session validation error:', error);
