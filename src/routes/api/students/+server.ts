@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { SpaceStudentManager, ProfileManager, getD1 } from '$lib/server/d1-db';
+import { SpaceStudentManager, StudentManager, getD1 } from '$lib/server/d1-db';
 
 /**
  * GET: スペースの生徒一覧を取得
@@ -46,12 +46,19 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 
 		const db = await getD1(platform);
 
-		// メールアドレスから生徒を検索
-		const student = await ProfileManager.getUserByEmail(db, email);
+		// メールアドレスから生徒を検索（studentsテーブルから最初に見つかった生徒）
+		const result = await db
+			.prepare('SELECT * FROM students WHERE email = ? LIMIT 1')
+			.bind(email)
+			.first();
 
-		if (!student) {
-			return json({ error: 'Student not found with this email' }, { status: 404 });
+		if (!result) {
+			return json({
+				error: 'このメールアドレスの生徒は登録されていません。生徒に登録リンクを送信してください。'
+			}, { status: 404 });
 		}
+
+		const student = result;
 
 		// すでに登録済みかチェック
 		const isAlreadyEnrolled = await SpaceStudentManager.isStudentInSpace(
@@ -61,7 +68,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		);
 
 		if (isAlreadyEnrolled) {
-			return json({ error: 'Student is already enrolled in this space' }, { status: 400 });
+			return json({ error: 'この生徒は既にこのスペースに登録されています' }, { status: 400 });
 		}
 
 		// 生徒を追加
