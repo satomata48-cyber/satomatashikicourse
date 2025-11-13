@@ -77,6 +77,16 @@ export const POST: RequestHandler = async ({ request, cookies, platform }) => {
 		if (spaceId) {
 			// スペースIDが指定されている場合、そのスペースの生徒を検索
 			student = await StudentManager.getStudentByEmailInSpace(db, email, spaceId);
+
+			// スペースに登録されていない場合でも、メールアドレスで検索（新規登録直後のユーザー用）
+			if (!student) {
+				console.log('[LOGIN] Student not found in space, trying email only');
+				const result = await db
+					.prepare('SELECT * FROM students WHERE email = ? LIMIT 1')
+					.bind(email)
+					.first();
+				student = result;
+			}
 		} else {
 			// スペースIDがない場合は、メールアドレスで検索（最初に見つかった生徒）
 			const result = await db
