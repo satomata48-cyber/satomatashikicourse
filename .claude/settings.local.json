@@ -19,7 +19,8 @@
       "Bash(npm run build:*)",
       "Bash(cat:*)",
       "Bash(npm run deploy:*)",
-      "Bash(npm uninstall:*)"
+      "Bash(npm uninstall:*)",
+      "Bash(timeout /t 3)"
     ],
     "deny": [],
     "ask": []

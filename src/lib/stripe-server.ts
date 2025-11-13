@@ -1,10 +1,21 @@
 import Stripe from 'stripe';
-import { STRIPE_SECRET_KEY } from '$env/static/private';
 
-if (!STRIPE_SECRET_KEY) {
-	throw new Error('STRIPE_SECRET_KEY is not set');
+/**
+ * Get Stripe client instance using runtime environment variables
+ * In Cloudflare Pages, secrets are available at runtime via platform.env
+ */
+export function getStripe(platform: App.Platform | undefined): Stripe {
+	const secretKey = platform?.env?.STRIPE_SECRET_KEY;
+
+	if (!secretKey) {
+		throw new Error(
+			'STRIPE_SECRET_KEY is not set. ' +
+			'Please configure it using: wrangler pages secret put STRIPE_SECRET_KEY'
+		);
+	}
+
+	return new Stripe(secretKey, {
+		apiVersion: '2024-11-20.acacia',
+		typescript: true
+	});
 }
-
-export const stripe = new Stripe(STRIPE_SECRET_KEY, {
-	typescript: true
-});

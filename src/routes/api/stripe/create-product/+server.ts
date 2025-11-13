@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { stripe } from '$lib/stripe-server';
+import { getStripe } from '$lib/stripe-server';
 import { CourseManager, SpaceManager, getD1 } from '$lib/server/d1-db';
 
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
@@ -35,6 +35,9 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		if (space.instructor_id !== locals.user.id) {
 			return json({ error: 'Forbidden' }, { status: 403 });
 		}
+
+		// Stripe クライアントを取得
+		const stripe = getStripe(platform);
 
 		// Stripeで商品を作成（スペース情報も含める）
 		const product = await stripe.products.create({

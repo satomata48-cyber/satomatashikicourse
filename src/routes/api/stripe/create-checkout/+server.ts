@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { stripe } from '$lib/stripe-server';
+import { getStripe } from '$lib/stripe-server';
 
-export const POST: RequestHandler = async ({ request, locals, url }) => {
+export const POST: RequestHandler = async ({ request, locals, url, platform }) => {
 	try {
 		const { courseId, priceId } = await request.json();
 
@@ -38,6 +38,9 @@ export const POST: RequestHandler = async ({ request, locals, url }) => {
 
 		// アプリケーションのベースURLを取得
 		const baseUrl = url.origin;
+
+		// Stripe クライアントを取得
+		const stripe = getStripe(platform);
 
 		// Stripe Checkoutセッションを作成
 		const session = await stripe.checkout.sessions.create({

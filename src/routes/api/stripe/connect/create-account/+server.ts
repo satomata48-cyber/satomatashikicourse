@@ -1,8 +1,8 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { stripe } from '$lib/stripe-server';
+import { getStripe } from '$lib/stripe-server';
 
-export const POST: RequestHandler = async ({ request, url }) => {
+export const POST: RequestHandler = async ({ request, url, platform }) => {
 	try {
 		const authHeader = request.headers.get('authorization');
 		if (!authHeader) {
@@ -35,6 +35,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 			} else {
 				// 本番モード：実際のStripe Connectアカウント作成
 				try {
+					const stripe = getStripe(platform);
 					const account = await stripe.accounts.create({
 						type: 'express',
 						country: 'JP',
@@ -74,6 +75,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		}
 
 		// 本番モード：Account Linkを作成（オンボーディング用）
+		const stripe = getStripe(platform);
 		const baseUrl = url.origin;
 		const accountLink = await stripe.accountLinks.create({
 			account: accountId as string,

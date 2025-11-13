@@ -1,8 +1,8 @@
 import { redirect } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { stripe } from '$lib/stripe-server';
+import { getStripe } from '$lib/stripe-server';
 
-export const GET: RequestHandler = async ({ url, locals }) => {
+export const GET: RequestHandler = async ({ url, locals, platform }) => {
 	try {
 		// TODO: D1実装が必要 - locals から認証情報を取得
 		const user = locals.user;
@@ -34,6 +34,7 @@ export const GET: RequestHandler = async ({ url, locals }) => {
 		} else {
 			// 本番モード：Stripeアカウントの状態を確認
 			try {
+				const stripe = getStripe(platform);
 				const account = await stripe.accounts.retrieve(profile.stripe_account_id);
 
 				// TODO: D1実装が必要 - データベースを更新
