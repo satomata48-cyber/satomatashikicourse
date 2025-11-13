@@ -210,7 +210,7 @@
 							</div>
 							<div class="flex space-x-2 ml-4">
 								<a
-									href="/{username}/space/{course.space.slug}/course/{course.slug || course.id}"
+									href="/{username}/space/{course.space.slug}/course/{course.id}"
 									target="_blank"
 									class="text-sm bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors"
 									title="公開コースページを新しいタブで開く"
