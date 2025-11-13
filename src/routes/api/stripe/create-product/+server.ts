@@ -10,11 +10,14 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const { courseId, name, description, price, currency } = await request.json();
+		const { courseId, name, description, price, currency, testMode } = await request.json();
 
 		if (!courseId || !name || !price) {
 			return json({ error: 'Missing required fields' }, { status: 400 });
 		}
+
+		// testModeがtrueの場合はテストモードを使用（デフォルトはfalse = 本番モード）
+		const isTestMode = testMode === true;
 
 		// D1データベースからコース情報を取得
 		const db = await getD1(platform);
@@ -36,8 +39,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			return json({ error: 'Forbidden' }, { status: 403 });
 		}
 
-		// Stripe クライアントを取得
-		const stripe = getStripe(platform);
+		// Stripe クライアントを取得（テスト/本番モード切り替え）
+		const stripe = getStripe(platform, isTestMode);
 
 		// Stripeで商品を作成（スペース情報も含める）
 		const product = await stripe.products.create({
@@ -48,7 +51,8 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 				spaceId: space.id,
 				spaceTitle: space.title,
 				spaceSlug: space.slug,
-				instructorId: space.instructor_id
+				instructorId: space.instructor_id,
+				testMode: isTestMode ? 'true' : 'false'
 			}
 		});
 
@@ -85,24 +89,34 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			}
 		});
 
-		// D1データベースを更新
-		await CourseManager.updateCourse(db, courseId, {
-			stripe_product_id: product.id,
-			stripe_price_id: stripePrice.id,
-			stripe_payment_link: paymentLink.url
-		});
+		// D1データベースを更新（テスト/本番モードで別フィールドに保存）
+		const updateFields = isTestMode
+			? {
+					stripe_test_product_id: product.id,
+					stripe_test_price_id: stripePrice.id,
+					stripe_test_payment_link: paymentLink.url
+			  }
+			: {
+					stripe_product_id: product.id,
+					stripe_price_id: stripePrice.id,
+					stripe_payment_link: paymentLink.url
+			  };
+
+		await CourseManager.updateCourse(db, courseId, updateFields);
 
 		console.log('Stripe product created and course updated:', {
 			courseId,
 			productId: product.id,
 			priceId: stripePrice.id,
-			paymentLink: paymentLink.url
+			paymentLink: paymentLink.url,
+			testMode: isTestMode
 		});
 
 		return json({
 			productId: product.id,
 			priceId: stripePrice.id,
-			paymentLink: paymentLink.url
+			paymentLink: paymentLink.url,
+			testMode: isTestMode
 		});
 
 	} catch (error) {
