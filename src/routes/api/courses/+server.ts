@@ -175,7 +175,12 @@ export const PUT: RequestHandler = async ({ request, locals, platform }) => {
 		return json({ course: updatedCourse });
 	} catch (error) {
 		console.error('Update course error:', error);
-		return json({ error: 'Internal server error' }, { status: 500 });
+		console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+		console.error('Error message:', error instanceof Error ? error.message : String(error));
+		return json({
+			error: 'Internal server error',
+			details: error instanceof Error ? error.message : String(error)
+		}, { status: 500 });
 	}
 };
 
