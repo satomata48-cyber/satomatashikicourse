@@ -102,7 +102,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
-		const { space_id, title, description, price, is_free, is_published } = await request.json();
+		const { space_id, title, description, slug, price, is_free, is_published } = await request.json();
 
 		if (!space_id || !title) {
 			return json({ error: 'Space ID and title are required' }, { status: 400 });
@@ -128,6 +128,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			space_id,
 			title,
 			description,
+			slug,
 			price: price || 0,
 			currency: 'JPY',
 			is_free: is_free !== undefined ? is_free : true,

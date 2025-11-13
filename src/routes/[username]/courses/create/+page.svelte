@@ -260,6 +260,7 @@
 					space_id: formData.spaceId,
 					title: formData.title,
 					description: formData.description,
+					slug: slug,
 					price: formData.price,
 					is_free: formData.isFree,
 					is_published: formData.isPublished
