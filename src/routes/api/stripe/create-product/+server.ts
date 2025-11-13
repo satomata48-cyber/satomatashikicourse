@@ -1,26 +1,40 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
 import { stripe } from '$lib/stripe-server';
+import { CourseManager, SpaceManager, getD1 } from '$lib/server/d1-db';
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	try {
+		// 認証チェック
+		if (!locals.user) {
+			return json({ error: 'Unauthorized' }, { status: 401 });
+		}
+
 		const { courseId, name, description, price, currency } = await request.json();
 
 		if (!courseId || !name || !price) {
 			return json({ error: 'Missing required fields' }, { status: 400 });
 		}
 
-		// TODO: D1実装が必要 - コース情報とスペース情報を取得
-		// スタブ実装
-		const course = {
-			id: courseId,
-			space: {
-				id: 'stub-space-id',
-				title: 'Sample Space',
-				slug: 'sample-space',
-				instructor_id: 'stub-instructor-id'
-			}
-		};
+		// D1データベースからコース情報を取得
+		const db = await getD1(platform);
+		const course = await CourseManager.getCourseById(db, courseId);
+
+		if (!course) {
+			return json({ error: 'Course not found' }, { status: 404 });
+		}
+
+		// スペース情報を取得
+		const space = await SpaceManager.getSpaceById(db, course.space_id as string);
+
+		if (!space) {
+			return json({ error: 'Space not found' }, { status: 404 });
+		}
+
+		// 所有者確認
+		if (space.instructor_id !== locals.user.id) {
+			return json({ error: 'Forbidden' }, { status: 403 });
+		}
 
 		// Stripeで商品を作成（スペース情報も含める）
 		const product = await stripe.products.create({
@@ -28,10 +42,10 @@ export const POST: RequestHandler = async ({ request }) => {
 			description: description || undefined,
 			metadata: {
 				courseId,
-				spaceId: course.space.id,
-				spaceTitle: course.space.title,
-				spaceSlug: course.space.slug,
-				instructorId: course.space.instructor_id
+				spaceId: space.id,
+				spaceTitle: space.title,
+				spaceSlug: space.slug,
+				instructorId: space.instructor_id
 			}
 		});
 
@@ -47,8 +61,8 @@ export const POST: RequestHandler = async ({ request }) => {
 			currency: currency.toLowerCase(),
 			metadata: {
 				courseId,
-				spaceId: course.space.id,
-				instructorId: course.space.instructor_id
+				spaceId: space.id,
+				instructorId: space.instructor_id
 			}
 		});
 
@@ -62,14 +76,20 @@ export const POST: RequestHandler = async ({ request }) => {
 			],
 			metadata: {
 				courseId,
-				spaceId: course.space.id,
-				spaceTitle: course.space.title,
-				instructorId: course.space.instructor_id
+				spaceId: space.id,
+				spaceTitle: space.title,
+				instructorId: space.instructor_id
 			}
 		});
 
-		// TODO: D1実装が必要 - データベースを更新
-		console.log('TODO: Update course in D1 with Stripe IDs:', {
+		// D1データベースを更新
+		await CourseManager.updateCourse(db, courseId, {
+			stripe_product_id: product.id,
+			stripe_price_id: stripePrice.id,
+			stripe_payment_link: paymentLink.url
+		});
+
+		console.log('Stripe product created and course updated:', {
 			courseId,
 			productId: product.id,
 			priceId: stripePrice.id,
@@ -84,8 +104,13 @@ export const POST: RequestHandler = async ({ request }) => {
 
 	} catch (error) {
 		console.error('Stripe product creation error:', error);
+		console.error('Error stack:', error instanceof Error ? error.stack : 'No stack trace');
+		console.error('Error message:', error instanceof Error ? error.message : String(error));
 		return json(
-			{ error: error instanceof Error ? error.message : 'Unknown error' },
+			{
+				error: 'Failed to create Stripe product',
+				details: error instanceof Error ? error.message : String(error)
+			},
 			{ status: 500 }
 		);
 	}
