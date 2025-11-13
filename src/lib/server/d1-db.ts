@@ -1143,3 +1143,130 @@ export class SpaceStudentManager {
 		return !!result;
 	}
 }
+
+/**
+ * 講師プロフィール管理
+ */
+export class InstructorProfileManager {
+	/**
+	 * 講師IDでプロフィール一覧を取得
+	 */
+	static async getProfilesByInstructorId(db: DatabaseAdapter, instructorId: string) {
+		const result = await db
+			.prepare('SELECT * FROM instructor_profiles WHERE instructor_id = ? ORDER BY is_primary DESC, created_at ASC')
+			.bind(instructorId)
+			.all();
+
+		return result.results || [];
+	}
+
+	/**
+	 * プロフィールをIDで取得
+	 */
+	static async getProfileById(db: DatabaseAdapter, id: string) {
+		const result = await db
+			.prepare('SELECT * FROM instructor_profiles WHERE id = ?')
+			.bind(id)
+			.first();
+
+		return result;
+	}
+
+	/**
+	 * プライマリプロフィールを取得
+	 */
+	static async getPrimaryProfile(db: DatabaseAdapter, instructorId: string) {
+		const result = await db
+			.prepare('SELECT * FROM instructor_profiles WHERE instructor_id = ? AND is_primary = 1 LIMIT 1')
+			.bind(instructorId)
+			.first();
+
+		return result;
+	}
+
+	/**
+	 * プロフィール作成
+	 */
+	static async createProfile(
+		db: DatabaseAdapter,
+		profile: {
+			id: string;
+			instructor_id: string;
+			display_name: string;
+			bio?: string;
+			avatar_url?: string;
+			social_links?: string;
+			is_primary?: boolean;
+			is_active?: boolean;
+		}
+	) {
+		await db
+			.prepare(
+				`INSERT INTO instructor_profiles (id, instructor_id, display_name, bio, avatar_url, social_links, is_primary, is_active, created_at, updated_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+			)
+			.bind(
+				profile.id,
+				profile.instructor_id,
+				profile.display_name,
+				profile.bio || null,
+				profile.avatar_url || null,
+				profile.social_links || null,
+				profile.is_primary !== undefined ? (profile.is_primary ? 1 : 0) : 1,
+				profile.is_active !== undefined ? (profile.is_active ? 1 : 0) : 1
+			)
+			.run();
+
+		return await InstructorProfileManager.getProfileById(db, profile.id);
+	}
+
+	/**
+	 * プロフィール更新
+	 */
+	static async updateProfile(db: DatabaseAdapter, profileId: string, updates: any) {
+		const fields: string[] = [];
+		const values: any[] = [];
+
+		if (updates.display_name !== undefined) {
+			fields.push('display_name = ?');
+			values.push(updates.display_name);
+		}
+		if (updates.bio !== undefined) {
+			fields.push('bio = ?');
+			values.push(updates.bio);
+		}
+		if (updates.avatar_url !== undefined) {
+			fields.push('avatar_url = ?');
+			values.push(updates.avatar_url);
+		}
+		if (updates.social_links !== undefined) {
+			fields.push('social_links = ?');
+			values.push(updates.social_links);
+		}
+		if (updates.is_primary !== undefined) {
+			fields.push('is_primary = ?');
+			values.push(updates.is_primary ? 1 : 0);
+		}
+		if (updates.is_active !== undefined) {
+			fields.push('is_active = ?');
+			values.push(updates.is_active ? 1 : 0);
+		}
+
+		if (fields.length === 0) return null;
+
+		fields.push('updated_at = CURRENT_TIMESTAMP');
+		values.push(profileId);
+
+		const sql = `UPDATE instructor_profiles SET ${fields.join(', ')} WHERE id = ?`;
+		await db.prepare(sql).bind(...values).run();
+
+		return await InstructorProfileManager.getProfileById(db, profileId);
+	}
+
+	/**
+	 * プロフィール削除
+	 */
+	static async deleteProfile(db: DatabaseAdapter, profileId: string) {
+		await db.prepare('DELETE FROM instructor_profiles WHERE id = ?').bind(profileId).run();
+	}
+}

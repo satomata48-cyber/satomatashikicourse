@@ -18,39 +18,134 @@
 	// 新規作成フォーム
 	let newProfile = {
 		display_name: '',
-		username: '',
 		bio: '',
 		avatar_url: ''
 	}
 
 	onMount(async () => {
-		// TODO: 複数講師プロフィール機能は現在実装中です
-		// 現在は単一のプロフィールのみサポートしています
-		error = 'この機能は現在実装中です。現在は単一の講師プロフィールのみサポートしています。'
+		await loadProfiles()
 	})
 
 	async function loadProfiles() {
-		// TODO: 実装が必要
+		loading = true
+		error = ''
+		try {
+			const response = await fetch('/api/instructor-profiles')
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'プロフィールの取得に失敗しました')
+			}
+
+			instructorProfiles = result.profiles || []
+		} catch (err: any) {
+			error = err.message
+		} finally {
+			loading = false
+		}
 	}
 
 	async function handleCreateProfile() {
-		error = 'この機能は現在実装中です'
+		error = ''
+		successMessage = ''
+
+		if (!newProfile.display_name) {
+			error = '表示名は必須です'
+			return
+		}
+
+		loading = true
+		try {
+			const response = await fetch('/api/instructor-profiles', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(newProfile)
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'プロフィールの作成に失敗しました')
+			}
+
+			successMessage = 'プロフィールを作成しました！'
+			showCreateModal = false
+			newProfile = { display_name: '', bio: '', avatar_url: '' }
+			await loadProfiles()
+		} catch (err: any) {
+			error = err.message
+		} finally {
+			loading = false
+		}
 	}
 
 	async function handleSetPrimary(profileId: string) {
-		error = 'この機能は現在実装中です'
+		// 現在は1プロフィールのみなので常にプライマリ
+		successMessage = 'このプロフィールは既にプライマリです'
 	}
 
 	async function handleToggleActive(profileId: string, currentStatus: boolean) {
-		error = 'この機能は現在実装中です'
+		error = ''
+		successMessage = ''
+
+		loading = true
+		try {
+			const response = await fetch('/api/instructor-profiles', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id: profileId,
+					is_active: !currentStatus
+				})
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'ステータスの変更に失敗しました')
+			}
+
+			successMessage = currentStatus ? 'プロフィールを無効化しました' : 'プロフィールを有効化しました'
+			await loadProfiles()
+		} catch (err: any) {
+			error = err.message
+		} finally {
+			loading = false
+		}
 	}
 
 	function openDeleteModal(profileId: string) {
-		error = 'この機能は現在実装中です'
+		deleteTargetId = profileId
+		showDeleteModal = true
 	}
 
 	async function handleDelete() {
-		error = 'この機能は現在実装中です'
+		if (!deleteTargetId) return
+
+		error = ''
+		successMessage = ''
+
+		loading = true
+		try {
+			const response = await fetch(`/api/instructor-profiles?id=${deleteTargetId}`, {
+				method: 'DELETE'
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '削除に失敗しました')
+			}
+
+			successMessage = 'プロフィールを削除しました'
+			showDeleteModal = false
+			deleteTargetId = null
+			await loadProfiles()
+		} catch (err: any) {
+			error = err.message
+		} finally {
+			loading = false
+		}
 	}
 
 	function goToEdit(profileUsername: string) {
@@ -141,7 +236,7 @@
 							{/if}
 							<div class="flex-1 min-w-0">
 								<h3 class="text-lg font-semibold text-gray-900 truncate">{profile.display_name}</h3>
-								<p class="text-sm text-gray-500">@{profile.username}</p>
+								<p class="text-sm text-gray-500">講師プロフィール</p>
 							</div>
 						</div>
 
@@ -171,7 +266,7 @@
 						<!-- アクション -->
 						<div class="flex flex-col space-y-2">
 							<button
-								on:click={() => goToEdit(profile.username)}
+								on:click={() => goto(`/${username}/profile`)}
 								class="w-full px-4 py-2 bg-blue-50 text-blue-700 rounded-lg text-sm font-medium hover:bg-blue-100 transition-colors"
 							>
 								編集
@@ -229,21 +324,6 @@
 						/>
 					</div>
 
-					<!-- ユーザー名 -->
-					<div>
-						<label for="username" class="block text-sm font-medium text-gray-700 mb-2">
-							ユーザー名 <span class="text-red-500">*</span>
-						</label>
-						<input
-							type="text"
-							id="username"
-							bind:value={newProfile.username}
-							placeholder="yamada-taro"
-							class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-						/>
-						<p class="text-xs text-gray-500 mt-1">英数字、ハイフン、アンダースコアのみ使用可能</p>
-					</div>
-
 					<!-- 自己紹介 -->
 					<div>
 						<label for="bio" class="block text-sm font-medium text-gray-700 mb-2">
@@ -270,7 +350,7 @@
 							placeholder="https://example.com/avatar.jpg"
 							class="w-full px-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 						/>
-						<p class="text-xs text-gray-500 mt-1">後で詳細編集画面でアップロードできます</p>
+						<p class="text-xs text-gray-500 mt-1">画像アップロード機能は準備中です。URLを直接入力してください。</p>
 					</div>
 				</div>
 
