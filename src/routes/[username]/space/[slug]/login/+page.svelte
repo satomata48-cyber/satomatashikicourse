@@ -51,11 +51,15 @@
 		error = ''
 
 		try {
-			// ログインAPIを呼び出す
+			// ログインAPIを呼び出す（生徒用にspaceIdを含める）
 			const response = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ email, password })
+				body: JSON.stringify({
+					email,
+					password,
+					spaceId: space?.id // 生徒ログインの場合、スペースIDを渡す
+				})
 			})
 
 			const result = await response.json()

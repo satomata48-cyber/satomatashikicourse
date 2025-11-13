@@ -120,13 +120,14 @@
 				throw new Error(errorData.error || '登録に失敗しました')
 			}
 
-			// 登録成功後、自動ログイン
+			// 登録成功後、自動ログイン（生徒用にspaceIdを含める）
 			const loginResponse = await fetch('/api/auth/login', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					email: signUpData.email,
-					password: signUpData.password
+					password: signUpData.password,
+					spaceId: space?.id
 				})
 			})
 
