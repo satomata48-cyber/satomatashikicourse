@@ -3,7 +3,7 @@
   "version": "0.0.1",
   "private": true,
   "scripts": {
-    "build": "vite build",
+    "build": "vite build && node -e \"const fs=require('fs');const path=require('path');['_worker.js','manifest.js'].forEach(f=>{const src=path.join('.svelte-kit','cloudflare-tmp',f);const dest=path.join('.svelte-kit','cloudflare',f);if(fs.existsSync(src)){fs.copyFileSync(src,dest);console.log('Copied',f);}});\"",
     "dev": "vite dev --port 5173",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",

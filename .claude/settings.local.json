@@ -16,7 +16,8 @@
       "Bash(git commit -m \"$(cat <<''EOF''\nfix: 講師と生徒の認証を完全分離\n\n- /api/auth/register: ProfileManager → InstructorManager/StudentManager に変更\n- /api/auth/login: 生徒のログインサポートを追加\n- 講師は instructors テーブル、生徒は students テーブルを使用\n- 生徒は複数スペースに同じメールアドレスで登録可能\n\n🤖 Generated with [Claude Code](https://claude.com/claude-code)\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
       "Bash(git push:*)",
       "Bash(git commit:*)",
-      "Bash(npm run build:*)"
+      "Bash(npm run build:*)",
+      "Bash(cat:*)"
     ],
     "deny": [],
     "ask": []
