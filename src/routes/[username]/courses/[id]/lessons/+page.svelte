@@ -42,18 +42,26 @@
 	async function loadData() {
 		try {
 			// APIからコース情報を取得
-			const response = await fetch(`/api/courses?id=${courseId}`)
-			const result = await response.json()
+			const courseResponse = await fetch(`/api/courses?id=${courseId}`)
+			const courseResult = await courseResponse.json()
 
-			if (!response.ok) {
-				throw new Error(result.error || 'コースの取得に失敗しました')
+			if (!courseResponse.ok) {
+				throw new Error(courseResult.error || 'コースの取得に失敗しました')
 			}
 
-			course = result.course
-			space = result.space
+			course = courseResult.course
+			space = courseResult.space
 
-			// TODO: レッスンAPI実装後に取得
-			lessons = []
+			// レッスン一覧を取得
+			const lessonsResponse = await fetch(`/api/lessons?courseId=${courseId}`)
+			const lessonsResult = await lessonsResponse.json()
+
+			if (lessonsResponse.ok) {
+				lessons = lessonsResult.lessons || []
+			} else {
+				console.warn('Failed to load lessons:', lessonsResult.error)
+				lessons = []
+			}
 
 		} catch (err: any) {
 			error = err.message
@@ -98,8 +106,43 @@
 		createError = ''
 
 		try {
-			// TODO: レッスンAPI実装
-			createError = 'レッスン機能は現在実装中です'
+			const lessonData = {
+				course_id: courseId,
+				title: newLesson.title,
+				description: newLesson.description,
+				content: newLesson.content,
+				video_url: newLesson.videoUrl,
+				video_type: newLesson.videoUrl ? newLesson.videoType : null,
+				duration: newLesson.duration * 60, // 分を秒に変換
+				order_index: lessons.length, // 末尾に追加
+				is_published: newLesson.isPublished
+			}
+
+			const url = editMode ? '/api/lessons' : '/api/lessons'
+			const method = editMode ? 'PUT' : 'POST'
+
+			const requestData = editMode
+				? { id: editingLesson.id, ...lessonData }
+				: lessonData
+
+			const response = await fetch(url, {
+				method,
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(requestData)
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'レッスンの保存に失敗しました')
+			}
+
+			// フォームをリセット
+			cancelEdit()
+
+			// レッスンリストを再読み込み
+			await loadData()
+
 		} catch (err: any) {
 			createError = err.message || 'レッスン作成に失敗しました'
 			console.error('Lesson creation error:', err)
@@ -114,8 +157,19 @@
 		}
 
 		try {
-			// TODO: レッスンAPI実装
-			alert('レッスン機能は現在実装中です')
+			const response = await fetch(`/api/lessons?id=${lessonId}`, {
+				method: 'DELETE'
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '削除に失敗しました')
+			}
+
+			// レッスンリストを再読み込み
+			await loadData()
+
 		} catch (err: any) {
 			alert(`削除に失敗しました: ${err.message}`)
 		}
@@ -123,24 +177,62 @@
 
 	async function togglePublished(lesson: any) {
 		try {
-			// TODO: レッスンAPI実装
-			alert('レッスン機能は現在実装中です')
+			const response = await fetch('/api/lessons', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					id: lesson.id,
+					is_published: !lesson.is_published
+				})
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '公開状態の変更に失敗しました')
+			}
+
+			// レッスンリストを再読み込み
+			await loadData()
+
 		} catch (err: any) {
 			alert(`公開状態の変更に失敗しました: ${err.message}`)
 		}
 	}
-	
+
 	// ドラッグ&ドロップでの並び替え
 	function handleDndConsider(e: any) {
 		lessons = e.detail.items
 		dragDisabled = false
 	}
-	
+
 	async function handleDndFinalize(e: any) {
 		lessons = e.detail.items
 		dragDisabled = true
 
-		// TODO: レッスンAPI実装後に並び順を保存
+		// 並び順を更新（各レッスンのorder_indexを更新）
+		try {
+			for (let i = 0; i < lessons.length; i++) {
+				const lesson = lessons[i]
+				if (lesson.order_index !== i) {
+					await fetch('/api/lessons', {
+						method: 'PUT',
+						headers: { 'Content-Type': 'application/json' },
+						body: JSON.stringify({
+							id: lesson.id,
+							order_index: i
+						})
+					})
+				}
+			}
+
+			// レッスンリストを再読み込み
+			await loadData()
+
+		} catch (err: any) {
+			console.error('Failed to update lesson order:', err)
+			alert(`並び順の保存に失敗しました: ${err.message}`)
+		}
 	}
 	
 	function formatDuration(seconds: number): string {
