@@ -7,7 +7,7 @@ import { InstructorProfileManager, getD1, generateUUID } from '$lib/server/d1-db
  */
 export const GET: RequestHandler = async ({ locals, platform }) => {
 	try {
-		if (!locals.user || locals.userType !== 'instructor') {
+		if (!locals.user || locals.user.userType !== 'instructor') {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
@@ -31,7 +31,7 @@ export const GET: RequestHandler = async ({ locals, platform }) => {
  */
 export const POST: RequestHandler = async ({ request, locals, platform }) => {
 	try {
-		if (!locals.user || locals.userType !== 'instructor') {
+		if (!locals.user || locals.user.userType !== 'instructor') {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
@@ -78,7 +78,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
  */
 export const PUT: RequestHandler = async ({ request, locals, platform }) => {
 	try {
-		if (!locals.user || locals.userType !== 'instructor') {
+		if (!locals.user || locals.user.userType !== 'instructor') {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
@@ -111,7 +111,7 @@ export const PUT: RequestHandler = async ({ request, locals, platform }) => {
  */
 export const DELETE: RequestHandler = async ({ url, locals, platform }) => {
 	try {
-		if (!locals.user || locals.userType !== 'instructor') {
+		if (!locals.user || locals.user.userType !== 'instructor') {
 			return json({ error: 'Unauthorized' }, { status: 401 });
 		}
 
