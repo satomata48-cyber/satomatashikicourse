@@ -73,7 +73,7 @@ CREATE TABLE IF NOT EXISTS lessons (
   description TEXT,
   content TEXT,
   video_url TEXT,
-  video_type TEXT, -- 'youtube', 'supabase', 'external'
+  video_type TEXT, -- 'youtube', 'external'
   duration INTEGER,
   order_index INTEGER NOT NULL,
   is_published INTEGER DEFAULT 1,
@@ -148,7 +148,7 @@ CREATE TABLE IF NOT EXISTS stripe_webhook_events (
 CREATE INDEX idx_webhook_events_processed ON stripe_webhook_events(processed);
 CREATE INDEX idx_webhook_events_stripe_id ON stripe_webhook_events(stripe_event_id);
 
--- 9. sessions table (認証セッション - Supabase Auth代替)
+-- 9. sessions table (認証セッション - 講師/生徒共通セッション)
 CREATE TABLE IF NOT EXISTS sessions (
   id TEXT PRIMARY KEY,
   user_id TEXT NOT NULL,

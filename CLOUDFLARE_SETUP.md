@@ -18,34 +18,29 @@
 
 #### 追加する環境変数:
 
-**PUBLIC_SUPABASE_URL**
-```
-https://qpwtygrouzicbrtslfnp.supabase.co
-```
-
-**PUBLIC_SUPABASE_ANON_KEY**
-```
-your_supabase_anon_key_here
-```
-
-**STRIPE_SECRET_KEY**
+**STRIPE_SECRET_KEY** (本番)
 ```
 sk_live_your_stripe_secret_key_here
+```
+
+**STRIPE_TEST_SECRET_KEY** (テスト)
+```
+sk_test_your_stripe_test_secret_key_here
+```
+
+**PUBLIC_STRIPE_PUBLISHABLE_KEY** (本番)
+```
+pk_live_your_stripe_publishable_key_here
+```
+
+**PUBLIC_STRIPE_TEST_PUBLISHABLE_KEY** (テスト)
+```
+pk_test_your_stripe_test_publishable_key_here
 ```
 
 **STRIPE_WEBHOOK_SECRET**
 ```
 whsec_your_webhook_secret_here
-```
-
-**PUBLIC_STRIPE_PUBLISHABLE_KEY**
-```
-pk_live_your_stripe_publishable_key_here
-```
-
-**SUPABASE_SERVICE_ROLE_KEY**
-```
-your_supabase_service_role_key_here
 ```
 
 6. **Save** をクリック
@@ -83,9 +78,9 @@ https://satomatashiki-course.pages.dev/api/stripe/webhook
 
 環境変数設定後、以下をテスト:
 - [ ] サイトにアクセスできる
-- [ ] ログインが機能する
-- [ ] Supabase接続が正常
-- [ ] Stripe決済が機能する
+- [ ] 講師/生徒ログインが機能する
+- [ ] Cloudflare D1データベース接続が正常
+- [ ] Stripe決済が機能する（テスト/本番モード両方）
 
 ## トラブルシューティング
 
