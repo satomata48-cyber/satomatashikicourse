@@ -27,8 +27,55 @@
 
 	async function loadDashboardData() {
 		try {
-			// TODO: D1実装が必要 - ダッシュボードデータの取得
-			throw new Error('この機能は現在実装中です')
+			// スペース情報を取得
+			const spaceResponse = await fetch(`/api/spaces?username=${username}&slug=${slug}`)
+			const spaceResult = await spaceResponse.json()
+
+			if (!spaceResponse.ok) {
+				throw new Error(spaceResult.error || 'スペースの読み込みに失敗しました')
+			}
+
+			space = spaceResult.space
+
+			// このスペースのコース一覧を取得
+			const coursesResponse = await fetch(`/api/courses?username=${username}`)
+			const coursesResult = await coursesResponse.json()
+
+			if (coursesResponse.ok && coursesResult.courses) {
+				// このスペースの公開済みコースのみフィルター
+				courses = coursesResult.courses.filter((course: any) =>
+					course.space_id === space.id && course.is_published
+				)
+
+				// 各コースのレッスン情報を取得
+				for (const course of courses) {
+					const lessonsResponse = await fetch(`/api/lessons?courseId=${course.id}`)
+					const lessonsResult = await lessonsResponse.json()
+
+					if (lessonsResponse.ok && lessonsResult.lessons) {
+						course.lessons = lessonsResult.lessons.filter((l: any) => l.is_published)
+					} else {
+						course.lessons = []
+					}
+				}
+
+				// 統計を計算
+				calculateStats()
+			}
+
+			// 生徒の登録情報を取得
+			if (data.user) {
+				const studentResponse = await fetch(`/api/students?spaceId=${space.id}`)
+				const studentResult = await studentResponse.json()
+
+				if (studentResponse.ok) {
+					student = studentResult.students?.find((s: any) => s.student_id === data.user.id)
+				}
+			}
+
+			// 最近の進捗を読み込み
+			await loadRecentProgress()
+
 		} catch (err: any) {
 			error = err.message
 			console.error('Load dashboard data error:', err)
@@ -130,18 +177,128 @@
 			</a>
 		</div>
 	{:else}
-		<div class="text-center py-12">
-			<svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-			</svg>
-			<h3 class="text-lg font-medium text-gray-900 mb-2">学習を始めましょう</h3>
-			<p class="text-gray-600 mb-4">この機能は現在実装中です</p>
-			<a
-				href="/{username}/space/{slug}/student/courses"
-				class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-			>
-				コース一覧を見る
-			</a>
+		<!-- 統計カード -->
+		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6 mb-8">
+			<!-- 総コース数 -->
+			<div class="bg-white rounded-lg shadow p-6">
+				<div class="flex items-center">
+					<div class="flex-shrink-0">
+						<svg class="h-8 w-8 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+						</svg>
+					</div>
+					<div class="ml-4">
+						<p class="text-sm font-medium text-gray-600">総コース数</p>
+						<p class="text-2xl font-bold text-gray-900">{stats.totalCourses}</p>
+					</div>
+				</div>
+			</div>
+
+			<!-- 完了コース数 -->
+			<div class="bg-white rounded-lg shadow p-6">
+				<div class="flex items-center">
+					<div class="flex-shrink-0">
+						<svg class="h-8 w-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+						</svg>
+					</div>
+					<div class="ml-4">
+						<p class="text-sm font-medium text-gray-600">完了コース</p>
+						<p class="text-2xl font-bold text-gray-900">{stats.completedCourses}</p>
+					</div>
+				</div>
+			</div>
+
+			<!-- 総レッスン数 -->
+			<div class="bg-white rounded-lg shadow p-6">
+				<div class="flex items-center">
+					<div class="flex-shrink-0">
+						<svg class="h-8 w-8 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+						</svg>
+					</div>
+					<div class="ml-4">
+						<p class="text-sm font-medium text-gray-600">総レッスン数</p>
+						<p class="text-2xl font-bold text-gray-900">{stats.totalLessons}</p>
+					</div>
+				</div>
+			</div>
+
+			<!-- 完了レッスン数 -->
+			<div class="bg-white rounded-lg shadow p-6">
+				<div class="flex items-center">
+					<div class="flex-shrink-0">
+						<svg class="h-8 w-8 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+						</svg>
+					</div>
+					<div class="ml-4">
+						<p class="text-sm font-medium text-gray-600">完了レッスン</p>
+						<p class="text-2xl font-bold text-gray-900">{stats.completedLessons}</p>
+					</div>
+				</div>
+			</div>
 		</div>
+
+		<!-- コース一覧 -->
+		{#if courses.length > 0}
+			<div class="bg-white rounded-lg shadow">
+				<div class="px-6 py-4 border-b border-gray-200">
+					<h3 class="text-lg font-medium text-gray-900">コース一覧</h3>
+				</div>
+				<div class="divide-y divide-gray-200">
+					{#each courses as course}
+						<a
+							href="/{username}/space/{slug}/student/course/{course.id}"
+							class="block px-6 py-4 hover:bg-gray-50 transition-colors"
+						>
+							<div class="flex items-center justify-between">
+								<div class="flex-1">
+									<h4 class="text-base font-medium text-gray-900">{course.title}</h4>
+									{#if course.description}
+										<p class="mt-1 text-sm text-gray-600">{course.description}</p>
+									{/if}
+									<div class="mt-2 flex items-center text-sm text-gray-500">
+										<svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2"/>
+										</svg>
+										{course.lessons?.length || 0}レッスン
+									</div>
+								</div>
+								<div class="ml-4">
+									<div class="text-right">
+										<div class="text-2xl font-bold text-blue-600">{getProgressPercentage(course)}%</div>
+										<div class="text-xs text-gray-500">完了</div>
+									</div>
+								</div>
+							</div>
+							<!-- プログレスバー -->
+							<div class="mt-3 w-full bg-gray-200 rounded-full h-2">
+								<div
+									class="bg-blue-600 h-2 rounded-full transition-all"
+									style="width: {getProgressPercentage(course)}%"
+								></div>
+							</div>
+						</a>
+					{/each}
+				</div>
+				<div class="px-6 py-4 bg-gray-50">
+					<a
+						href="/{username}/space/{slug}/student/courses"
+						class="text-sm font-medium text-blue-600 hover:text-blue-800"
+					>
+						すべてのコースを見る →
+					</a>
+				</div>
+			</div>
+		{:else}
+			<div class="bg-white rounded-lg shadow p-12 text-center">
+				<svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+				</svg>
+				<h3 class="text-lg font-medium text-gray-900 mb-2">まだコースがありません</h3>
+				<p class="text-gray-600 mb-4">講師がコースを公開するまでお待ちください</p>
+			</div>
+		{/if}
 	{/if}
 </div>

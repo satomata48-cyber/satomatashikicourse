@@ -10,7 +10,7 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 		const courseId = url.searchParams.get('id');
 		const courseSlug = url.searchParams.get('slug');
 
-		const db = getD1(platform);
+		const db = await getD1(platform);
 
 		// コースIDが指定されている場合は単一コース取得
 		if (courseId) {
@@ -20,7 +20,7 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 			}
 
 			// スペース情報も取得
-			const space = await SpaceManager.getSpaceById(db, course.space_id);
+			const space = await SpaceManager.getSpaceById(db, course.space_id as string);
 
 			return json({ course, space });
 		}
@@ -108,7 +108,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			return json({ error: 'Space ID and title are required' }, { status: 400 });
 		}
 
-		const db = getD1(platform);
+		const db = await getD1(platform);
 
 		// スペースの所有者確認
 		const space = await SpaceManager.getSpaceById(db, space_id);
@@ -153,7 +153,7 @@ export const PUT: RequestHandler = async ({ request, locals, platform }) => {
 			return json({ error: 'Course ID is required' }, { status: 400 });
 		}
 
-		const db = getD1(platform);
+		const db = await getD1(platform);
 
 		// コースの所有者確認
 		const course = await CourseManager.getCourseById(db, id);
@@ -162,7 +162,7 @@ export const PUT: RequestHandler = async ({ request, locals, platform }) => {
 			return json({ error: 'Course not found' }, { status: 404 });
 		}
 
-		const space = await SpaceManager.getSpaceById(db, course.space_id);
+		const space = await SpaceManager.getSpaceById(db, course.space_id as string);
 
 		if (!space || space.instructor_id !== locals.user.id) {
 			return json({ error: 'Forbidden' }, { status: 403 });
@@ -190,7 +190,7 @@ export const DELETE: RequestHandler = async ({ url, locals, platform }) => {
 			return json({ error: 'Course ID is required' }, { status: 400 });
 		}
 
-		const db = getD1(platform);
+		const db = await getD1(platform);
 
 		// コースの所有者確認
 		const course = await CourseManager.getCourseById(db, courseId);
@@ -199,7 +199,7 @@ export const DELETE: RequestHandler = async ({ url, locals, platform }) => {
 			return json({ error: 'Course not found' }, { status: 404 });
 		}
 
-		const space = await SpaceManager.getSpaceById(db, course.space_id);
+		const space = await SpaceManager.getSpaceById(db, course.space_id as string);
 
 		if (!space || space.instructor_id !== locals.user.id) {
 			return json({ error: 'Forbidden' }, { status: 403 });

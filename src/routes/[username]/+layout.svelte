@@ -11,7 +11,7 @@
 	let currentPath: string
 
 	$: {
-		username = $page.params.username
+		username = $page.params.username as string
 		currentPath = $page.url.pathname
 	}
 

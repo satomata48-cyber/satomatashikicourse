@@ -26,8 +26,32 @@
 
 	async function loadProfileData() {
 		try {
-			// TODO: D1実装が必要 - スペース情報、生徒登録、プロフィール情報の取得
-			throw new Error('この機能は現在実装中です')
+			// スペース情報を取得
+			const spaceResponse = await fetch(`/api/spaces?username=${username}&slug=${slug}`)
+			const spaceResult = await spaceResponse.json()
+
+			if (!spaceResponse.ok) {
+				throw new Error(spaceResult.error || 'スペースの読み込みに失敗しました')
+			}
+
+			space = spaceResult.space
+
+			// 生徒の登録情報を取得
+			if (data.user) {
+				const studentResponse = await fetch(`/api/students?spaceId=${space.id}`)
+				const studentResult = await studentResponse.json()
+
+				if (studentResponse.ok) {
+					student = studentResult.students?.find((s: any) => s.student_id === data.user.id)
+				}
+
+				// ユーザープロフィール情報を取得
+				profile = data.user
+				email = profile.email
+				displayName = profile.display_name || ''
+				bio = profile.bio || ''
+			}
+
 		} catch (err: any) {
 			error = err.message
 			console.error('Load profile data error:', err)
@@ -54,8 +78,32 @@
 			error = ''
 			success = ''
 
-			// TODO: D1実装が必要 - プロフィール更新
-			throw new Error('この機能は現在実装中です')
+			// プロフィール更新APIを呼び出す
+			const response = await fetch('/api/profile', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					display_name: displayName,
+					bio: bio
+				})
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'プロフィールの更新に失敗しました')
+			}
+
+			// 成功したらプロフィール情報を更新
+			profile = result.profile
+			editing = false
+			success = 'プロフィールを更新しました'
+
+			// 成功メッセージを3秒後に消す
+			setTimeout(() => {
+				success = ''
+			}, 3000)
+
 		} catch (err: any) {
 			error = err.message || 'プロフィールの更新に失敗しました'
 		}

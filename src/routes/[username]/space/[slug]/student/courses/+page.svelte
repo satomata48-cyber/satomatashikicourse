@@ -23,8 +23,30 @@
 
 	async function loadCoursesData() {
 		try {
-			// TODO: D1実装が必要 - コースデータの取得
-			throw new Error('この機能は現在実装中です')
+			// スペース情報を取得
+			const spaceResponse = await fetch(`/api/spaces?username=${username}&slug=${slug}`)
+			const spaceResult = await spaceResponse.json()
+
+			if (!spaceResponse.ok) {
+				throw new Error(spaceResult.error || 'スペースの読み込みに失敗しました')
+			}
+
+			space = spaceResult.space
+
+			// このスペースのコース一覧を取得
+			const coursesResponse = await fetch(`/api/courses?username=${username}`)
+			const coursesResult = await coursesResponse.json()
+
+			if (coursesResponse.ok && coursesResult.courses) {
+				// このスペースの公開済みコースのみフィルター
+				courses = coursesResult.courses.filter((course: any) =>
+					course.space_id === space.id && course.is_published
+				)
+			}
+
+			// 購入済みコースを読み込み
+			await loadPurchasedCourses()
+
 		} catch (err: any) {
 			error = err.message || 'データの読み込みに失敗しました'
 			console.error('Load courses data error:', err)
@@ -35,7 +57,8 @@
 
 	async function loadPurchasedCourses() {
 		try {
-			// TODO: D1実装が必要 - 購入済みコースの取得
+			// TODO: 購入履歴APIが実装されるまで、無料コースは自動的にアクセス可能として扱う
+			// 将来的には /api/purchases エンドポイントから取得する予定
 			purchasedCourses = new Set()
 		} catch (err) {
 			console.error('Load purchased courses error:', err)

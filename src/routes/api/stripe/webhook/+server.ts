@@ -4,7 +4,7 @@ import Stripe from 'stripe'
 import { STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET } from '$env/static/private'
 
 const stripe = new Stripe(STRIPE_SECRET_KEY, {
-	apiVersion: '2023-10-16'
+	typescript: true
 })
 
 // TODO: D1実装が必要

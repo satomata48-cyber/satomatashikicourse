@@ -110,7 +110,7 @@
 								title: formData.title,
 								content: formData.description || '最高の学習体験をお届けします。プロフェッショナルな指導で、あなたのスキルを次のレベルへ。',
 								buttonText: '今すぐ無料で始める',
-								buttonUrl: `/${username}/space/${formData.slug}/enroll`,
+								buttonUrl: `/${username}/space/${formData.slug}/register`,
 								imageUrl: '',
 								backgroundColor: formData.themeColor,
 								textColor: '#ffffff'
@@ -165,7 +165,7 @@
 								title: '今すぐ学習を始めませんか？',
 								content: '無料登録で、すぐにコースをご覧いただけます。あなたの成長をサポートします。',
 								buttonText: '無料で始める',
-								buttonUrl: `/${username}/space/${formData.slug}/enroll`,
+								buttonUrl: `/${username}/space/${formData.slug}/register`,
 								imageUrl: '',
 								backgroundColor: '#ffffff',
 								textColor: '#111827'

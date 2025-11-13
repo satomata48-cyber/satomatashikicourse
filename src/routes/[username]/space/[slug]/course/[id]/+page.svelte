@@ -203,7 +203,7 @@
 								ログイン
 							</button>
 							<a
-								href="/{username}/space/{slug}/enroll"
+								href="/{username}/space/{slug}/register"
 								class="text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
 								style="background-color: {themeColor}"
 							>
@@ -294,7 +294,7 @@
 										</div>
 									{:else}
 										<a
-											href="/{username}/space/{slug}/enroll"
+											href="/{username}/space/{slug}/register"
 											class="block w-full text-center bg-white text-gray-900 py-3 px-6 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
 										>
 											学習を始める
@@ -312,7 +312,7 @@
 									</div>
 								{:else}
 									<a
-										href="/{username}/space/{slug}/enroll"
+										href="/{username}/space/{slug}/register"
 										class="block w-full text-center bg-white text-gray-900 py-3 px-6 rounded-lg font-semibold hover:bg-gray-100 transition-colors"
 									>
 										学習を始める
@@ -765,7 +765,7 @@
 				{#if !hasAccess}
 					{#if course.is_free}
 						<a
-							href="/{username}/space/{slug}/enroll"
+							href="/{username}/space/{slug}/register"
 							class="inline-flex items-center bg-white text-gray-900 px-8 py-4 rounded-lg font-semibold hover:scale-105 transition-transform duration-200"
 						>
 							無料で始める

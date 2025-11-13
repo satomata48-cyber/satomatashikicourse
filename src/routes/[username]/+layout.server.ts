@@ -2,11 +2,11 @@ import type { LayoutServerLoad } from './$types'
 import { redirect } from '@sveltejs/kit'
 
 export const load: LayoutServerLoad = async ({ locals, params, url }) => {
-	const { user, role } = locals
-	
+	const { user } = locals
+
 	// 公開ページ（/space/ パス）の場合は認証チェックをスキップ
 	const isPublicSpacePage = url.pathname.includes('/space/')
-	
+
 	if (!isPublicSpacePage) {
 		// 管理画面の場合のみ認証チェック
 		if (!user) {
@@ -15,11 +15,11 @@ export const load: LayoutServerLoad = async ({ locals, params, url }) => {
 			throw redirect(302, redirectUrl.toString())
 		}
 	}
-	
+
 	// ユーザー情報を返す（認証状況に関係なく）
 	return {
 		user: user || null,
-		role: user?.user_metadata?.role || null,
+		role: (user as any)?.role || null,
 		session: locals.session || null
 	}
 }

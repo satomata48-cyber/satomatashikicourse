@@ -24,7 +24,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		// 本番環境では実際のStripe Connectを使用
 		const isDevelopment = process.env.NODE_ENV !== 'production';
 
-		let accountId = profile.stripe_account_id;
+		let accountId: string | null = profile.stripe_account_id;
 		let accountStatus = 'active'; // 開発モードでは即座にアクティブ
 
 		if (!accountId) {
@@ -76,7 +76,7 @@ export const POST: RequestHandler = async ({ request, url }) => {
 		// 本番モード：Account Linkを作成（オンボーディング用）
 		const baseUrl = url.origin;
 		const accountLink = await stripe.accountLinks.create({
-			account: accountId,
+			account: accountId as string,
 			refresh_url: `${baseUrl}/api/stripe/connect/refresh`,
 			return_url: `${baseUrl}/api/stripe/connect/return`,
 			type: 'account_onboarding'

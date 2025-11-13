@@ -13,12 +13,8 @@
 	let student: any = null
 	let loading = true
 
-	// menuItemsをリアクティブにして、spaceデータが読み込まれたら正しいusernameを使用
-	$: menuItems = space ? [
-		{ label: 'ダッシュボード', href: `/${space.instructor.username}/space/${slug}/student`, icon: 'dashboard' },
-		{ label: 'コース一覧', href: `/${space.instructor.username}/space/${slug}/student/courses`, icon: 'courses' },
-		{ label: 'プロフィール', href: `/${space.instructor.username}/space/${slug}/student/profile`, icon: 'profile' }
-	] : [
+	// メニューアイテム（URLパラメータのusernameを使用）
+	$: menuItems = [
 		{ label: 'ダッシュボード', href: `/${username}/space/${slug}/student`, icon: 'dashboard' },
 		{ label: 'コース一覧', href: `/${username}/space/${slug}/student/courses`, icon: 'courses' },
 		{ label: 'プロフィール', href: `/${username}/space/${slug}/student/profile`, icon: 'profile' }
@@ -30,10 +26,35 @@
 
 	async function loadData() {
 		try {
-			// TODO: D1実装が必要 - スペース情報と生徒登録状態の取得
-			throw new Error('この機能は現在実装中です')
+			// スペース情報を取得
+			const spaceResponse = await fetch(`/api/spaces?username=${username}&slug=${slug}`)
+			const spaceResult = await spaceResponse.json()
+
+			if (!spaceResponse.ok) {
+				throw new Error(spaceResult.error || 'スペースの読み込みに失敗しました')
+			}
+
+			space = spaceResult.space
+
+			// 生徒の登録状態を確認
+			if (data.user) {
+				const studentResponse = await fetch(`/api/students?spaceId=${space.id}`)
+				const studentResult = await studentResponse.json()
+
+				if (studentResponse.ok) {
+					// このユーザーの登録状態を確認
+					const enrollment = studentResult.students?.find((s: any) => s.student_id === data.user.id)
+					if (enrollment) {
+						student = enrollment
+					} else {
+						// 登録されていない場合は登録ページにリダイレクト
+						goto(`/${username}/space/${slug}/register`)
+					}
+				}
+			}
 		} catch (err: any) {
 			console.error('Load data error:', err)
+			// エラーの場合はスペースページにリダイレクト
 			goto(`/${username}/space/${slug}`)
 		} finally {
 			loading = false
@@ -49,11 +70,17 @@
 
 	async function handleLogout() {
 		try {
-			// TODO: D1実装が必要 - ログアウト処理
-			const instructorUsername = space ? space.instructor.username : username
-			goto(`/${instructorUsername}/space/${slug}`)
+			// ログアウトAPIを呼び出す
+			await fetch('/api/auth/logout', {
+				method: 'POST'
+			})
+
+			// スペースページにリダイレクト
+			goto(`/${username}/space/${slug}`)
 		} catch (err: any) {
 			console.error('Logout error:', err)
+			// エラーでもスペースページにリダイレクト
+			goto(`/${username}/space/${slug}`)
 		}
 	}
 </script>
@@ -121,7 +148,7 @@
 					<!-- スペースページに戻る -->
 					<div class="border-t border-gray-200 mt-4 pt-4">
 						<a
-							href="/{space ? space.instructor.username : username}/space/{slug}"
+							href="/{username}/space/{slug}"
 							class="group flex items-center px-2 py-2 text-sm font-medium text-gray-600 hover:bg-gray-50 hover:text-gray-900 rounded-md"
 						>
 							<span class="mr-3">

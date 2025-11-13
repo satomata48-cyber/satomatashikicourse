@@ -52,7 +52,7 @@
 		</h2>
 		<p class="mt-2 text-center text-sm text-gray-600">
 			まだ登録していませんか？
-			<a href="/{username}/space/{slug}/enroll" class="font-medium text-blue-600 hover:text-blue-500">
+			<a href="/{username}/space/{slug}/register" class="font-medium text-blue-600 hover:text-blue-500">
 				生徒登録はこちら
 			</a>
 		</p>

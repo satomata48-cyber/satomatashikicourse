@@ -11,7 +11,7 @@ import { getD1, ProfileManager } from '$lib/server/d1-db';
  */
 export const GET: RequestHandler = async ({ url, platform }) => {
 	try {
-		const db = getD1(platform);
+		const db = await getD1(platform);
 		const username = url.searchParams.get('username');
 		const id = url.searchParams.get('id');
 

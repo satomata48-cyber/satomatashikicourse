@@ -29,18 +29,34 @@
 
 	// リアクティブにパラメータが設定されたらデータを読み込み
 	$: if (username && slug && username !== 'undefined' && slug !== 'undefined') {
-		console.log('Loading enroll data for:', { username, slug })
+		console.log('Loading registration data for:', { username, slug })
 		loadSpaceData().then(() => {
 			checkUserStatus()
 		})
 	} else {
-		console.log('Waiting for enroll params:', { username, slug })
+		console.log('Waiting for registration params:', { username, slug })
 	}
 
 	async function loadSpaceData() {
 		try {
-			// TODO: D1実装が必要 - スペース情報の取得
-			throw new Error('この機能は現在実装中です')
+			// スペース情報を取得
+			const spaceResponse = await fetch(`/api/spaces?username=${username}&slug=${slug}`)
+
+			if (!spaceResponse.ok) {
+				const errorData = await spaceResponse.json()
+				throw new Error(errorData.error || 'スペースの読み込みに失敗しました')
+			}
+
+			const spaceData = await spaceResponse.json()
+			space = spaceData.space
+
+			// 講師情報を取得
+			const instructorResponse = await fetch(`/api/profile?username=${username}`)
+
+			if (instructorResponse.ok) {
+				const instructorData = await instructorResponse.json()
+				instructor = instructorData.profile
+			}
 		} catch (err: any) {
 			error = err.message
 			console.error('Load space data error:', err)
@@ -53,8 +69,24 @@
 		isLoggedIn = !!data.user
 
 		if (data.user && space) {
-			// TODO: D1実装が必要 - 登録状態の確認
-			isAlreadyEnrolled = false
+			// 登録状態を確認
+			try {
+				const response = await fetch(`/api/students?spaceId=${space.id}`)
+				if (response.ok) {
+					const result = await response.json()
+					// このユーザーが登録されているか確認
+					const enrollment = result.students?.find((s: any) => s.student_id === data.user.id)
+					if (enrollment) {
+						isAlreadyEnrolled = true
+						// 既に登録済みの場合、ダッシュボードにリダイレクト
+						setTimeout(() => {
+							goto(`/${username}/space/${slug}/student`)
+						}, 2000)
+					}
+				}
+			} catch (err) {
+				console.error('Check enrollment error:', err)
+			}
 		}
 	}
 
@@ -67,8 +99,49 @@
 				throw new Error('すべての項目を入力してください')
 			}
 
-			// TODO: D1実装が必要 - サインアップ処理
-			throw new Error('この機能は現在実装中です')
+			// 新規ユーザー登録
+			const registerResponse = await fetch('/api/auth/register', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					email: signUpData.email,
+					password: signUpData.password,
+					display_name: signUpData.displayName,
+					role: 'student'
+				})
+			})
+
+			if (!registerResponse.ok) {
+				const errorData = await registerResponse.json()
+				// メールアドレスが既に登録されている場合は、ログインページへのリンクを表示
+				if (errorData.error === 'Email already registered') {
+					throw new Error('このメールアドレスは既に登録されています。ログインページからログインしてください。')
+				}
+				throw new Error(errorData.error || '登録に失敗しました')
+			}
+
+			// 登録成功後、自動ログイン
+			const loginResponse = await fetch('/api/auth/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					email: signUpData.email,
+					password: signUpData.password
+				})
+			})
+
+			if (!loginResponse.ok) {
+				throw new Error('ログインに失敗しました。手動でログインしてください。')
+			}
+
+			const loginData = await loginResponse.json()
+
+			// スペースに自動登録
+			if (space) {
+				await enrollToSpace(loginData.user.id)
+			} else {
+				signUpSuccess = true
+			}
 		} catch (err: any) {
 			console.error('Signup error:', err)
 			signUpError = err.message || '登録に失敗しました。しばらく時間をおいてから再度お試しください。'
@@ -91,15 +164,42 @@
 		error = ''
 
 		try {
-			// TODO: D1実装が必要 - スペースへの登録
-			throw new Error('この機能は現在実装中です')
+			if (!space) {
+				throw new Error('スペース情報が見つかりません')
+			}
+
+			// ユーザーのメールアドレスを取得（新規登録の場合はフォームから、既存ユーザーの場合はdata.userから）
+			const userEmail = signUpData.email || data.user?.email
+
+			if (!userEmail) {
+				throw new Error('メールアドレスが見つかりません')
+			}
+
+			// スペースに生徒を追加
+			const enrollResponse = await fetch('/api/students', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					spaceId: space.id,
+					email: userEmail
+				})
+			})
+
+			if (!enrollResponse.ok) {
+				const errorData = await enrollResponse.json()
+				throw new Error(errorData.error || '登録に失敗しました')
+			}
+
+			// 登録成功 - 生徒ダッシュボードにリダイレクト
+			await goto(`/${username}/space/${slug}/student`)
 		} catch (err: any) {
 			error = err.message
+			console.error('Enrollment error:', err)
 		} finally {
 			enrolling = false
 		}
 	}
-	
+
 	$: theme = space?.landing_page_content?.theme || { primaryColor: '#3B82F6', accentColor: '#F59E0B' }
 </script>
 
@@ -125,7 +225,7 @@
 {:else if space}
 	<div class="min-h-screen bg-gray-50">
 		<!-- Header -->
-		<header 
+		<header
 			class="py-12 text-white"
 			style="background: linear-gradient(135deg, {theme.primaryColor}, color-mix(in srgb, {theme.primaryColor} 80%, transparent))"
 		>
@@ -134,7 +234,7 @@
 				<p class="text-xl text-white/90">学習を始めるためのセットアップ</p>
 			</div>
 		</header>
-		
+
 		<div class="container mx-auto px-6 py-12">
 			<div class="max-w-md mx-auto">
 				{#if isAlreadyEnrolled}
@@ -201,13 +301,21 @@
 							<h2 class="text-2xl font-bold text-gray-900 mb-2">生徒登録</h2>
 							<p class="text-gray-600">{space.title} での学習を始めるためにアカウントを作成してください</p>
 						</div>
-						
+
 						{#if signUpError}
 							<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6">
-								{signUpError}
+								<p>{signUpError}</p>
+								{#if signUpError.includes('既に登録されています')}
+									<a
+										href="/{username}/space/{slug}/login"
+										class="mt-2 inline-block text-sm font-medium text-blue-600 hover:text-blue-800 underline"
+									>
+										→ ログインページへ
+									</a>
+								{/if}
 							</div>
 						{/if}
-						
+
 						<form on:submit|preventDefault={handleSignUp} class="space-y-6">
 							<div>
 								<label for="displayName" class="block text-sm font-medium text-gray-700 mb-2">
@@ -222,7 +330,7 @@
 									placeholder="田中太郎"
 								/>
 							</div>
-							
+
 							<div>
 								<label for="email" class="block text-sm font-medium text-gray-700 mb-2">
 									メールアドレス *
@@ -236,7 +344,7 @@
 									placeholder="example@email.com"
 								/>
 							</div>
-							
+
 							<div>
 								<label for="password" class="block text-sm font-medium text-gray-700 mb-2">
 									パスワード *
@@ -251,7 +359,7 @@
 									placeholder="6文字以上"
 								/>
 							</div>
-							
+
 							<button
 								type="submit"
 								disabled={signUpLoading}
@@ -260,11 +368,11 @@
 								{signUpLoading ? '登録中...' : 'このスペースに登録して学習を始める'}
 							</button>
 						</form>
-						
+
 						<div class="mt-6 text-center">
 							<p class="text-sm text-gray-600">
 								既にアカウントをお持ちですか？
-								<a 
+								<a
 									href="/{username}/space/{slug}/login"
 									class="text-blue-600 hover:text-blue-800 font-medium"
 								>
@@ -272,7 +380,7 @@
 								</a>
 							</p>
 						</div>
-						
+
 						{#if !needsSignUp}
 							<div class="mt-4 text-center">
 								<button
@@ -296,13 +404,13 @@
 								{space.title} での学習を開始します。
 							</p>
 						</div>
-						
+
 						{#if error}
 							<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6">
 								{error}
 							</div>
 						{/if}
-						
+
 						<!-- スペース情報 -->
 						<div class="bg-gray-50 rounded-lg p-6 mb-6">
 							<div class="flex items-center space-x-4">
@@ -325,7 +433,7 @@
 								</div>
 							</div>
 						</div>
-						
+
 						<button
 							on:click={handleEnroll}
 							disabled={enrolling}
@@ -333,7 +441,7 @@
 						>
 							{enrolling ? '登録中...' : '学習を始める'}
 						</button>
-						
+
 						<div class="mt-6 text-center">
 							<a
 								href="/{username}/space/{slug}"

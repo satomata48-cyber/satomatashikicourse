@@ -350,7 +350,7 @@
 						title: space.title,
 						content: space.description || '最高の学習体験をお届けします。プロフェッショナルな指導で、あなたのスキルを次のレベルへ。',
 						buttonText: '今すぐ無料で始める',
-						buttonUrl: `/${data.username}/space/${data.slug}/enroll`,
+						buttonUrl: `/${data.username}/space/${data.slug}/register`,
 						imageUrl: '',
 						backgroundColor: '#2563eb',
 						textColor: '#ffffff'
@@ -405,7 +405,7 @@
 						title: '今すぐ学習を始めませんか？',
 						content: '無料登録で、すぐにコースをご覧いただけます。あなたの成長をサポートします。',
 						buttonText: '無料で始める',
-						buttonUrl: `/${data.username}/space/${data.slug}/enroll`,
+						buttonUrl: `/${data.username}/space/${data.slug}/register`,
 						imageUrl: '',
 						backgroundColor: '#ffffff',
 						textColor: '#111827'
@@ -550,7 +550,7 @@
 				title: title || space.title,
 				content: description || space.description || '最高の学習体験をお届けします。プロフェッショナルな指導で、あなたのスキルを次のレベルへ。',
 				buttonText: '今すぐ無料で始める',
-				buttonUrl: `/${data.username}/space/${data.slug}/enroll`,
+				buttonUrl: `/${data.username}/space/${data.slug}/register`,
 				imageUrl: '',
 				backgroundColor: '#2563eb',
 				textColor: '#ffffff'
@@ -605,7 +605,7 @@
 				title: '今すぐ学習を始めませんか？',
 				content: '無料登録で、すぐにコースをご覧いただけます。あなたの成長をサポートします。',
 				buttonText: '無料で始める',
-				buttonUrl: `/${data.username}/space/${data.slug}/enroll`,
+				buttonUrl: `/${data.username}/space/${data.slug}/register`,
 				imageUrl: '',
 				backgroundColor: '#ffffff',
 				textColor: '#111827'
@@ -957,7 +957,7 @@
 														ログイン
 													</button>
 													<button class="text-white px-4 py-2 rounded-lg font-medium text-sm" style="background-color: {themeColor}">
-														生徒登録
+														登録
 													</button>
 												</div>
 											</div>

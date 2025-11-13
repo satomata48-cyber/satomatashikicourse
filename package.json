@@ -4,12 +4,12 @@
   "private": true,
   "scripts": {
     "build": "vite build",
-    "dev": "npm run build && wrangler pages dev .svelte-kit/cloudflare --d1=DB=satomatashiki-course-db --remote --compatibility-date=2024-01-01 --compatibility-flag=nodejs_compat --port=5173",
+    "dev": "vite dev --port 5173",
     "preview": "vite preview",
     "check": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json",
     "check:watch": "svelte-kit sync && svelte-check --tsconfig ./tsconfig.json --watch",
     "deploy": "npm run build && wrangler pages deploy .svelte-kit/cloudflare",
-    "cf-dev": "wrangler pages dev .svelte-kit/cloudflare"
+    "cf-dev": "npm run build && wrangler pages dev .svelte-kit/cloudflare --d1 DB=satomatashiki-course-db --compatibility-date=2024-01-01 --compatibility-flag=nodejs_compat --port=5173"
   },
   "devDependencies": {
     "@sveltejs/adapter-cloudflare": "^4.0.0",
@@ -26,6 +26,7 @@
     "@stripe/stripe-js": "^7.9.0",
     "@types/better-sqlite3": "^7.6.13",
     "autoprefixer": "^10.4.16",
+    "better-sqlite3": "^12.4.1",
     "postcss": "^8.4.32",
     "stripe": "^18.5.0",
     "svelte-dnd-action": "^0.9.64",

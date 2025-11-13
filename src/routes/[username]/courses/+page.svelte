@@ -186,7 +186,7 @@
 	{:else}
 		<div class="bg-white rounded-lg shadow overflow-hidden">
 			<div class="divide-y divide-gray-200">
-				{#each courses as course}
+				{#each filteredCourses as course}
 					<div class="p-6 hover:bg-gray-50">
 						<div class="flex items-start justify-between">
 							<div class="flex-1">

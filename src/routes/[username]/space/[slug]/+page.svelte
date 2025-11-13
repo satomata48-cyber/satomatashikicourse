@@ -32,6 +32,9 @@
 		loadSpaceData().then(() => {
 			if (data?.user && !hasRedirected) {
 				checkEnrollmentStatus()
+			} else {
+				// ログインしていない場合もcheckingEnrollmentをfalseに設定
+				checkingEnrollment = false
 			}
 		})
 	}
@@ -92,11 +95,26 @@
 	
 	async function checkEnrollmentStatus() {
 		try {
-			// TODO: 生徒登録状況チェックAPIの実装が必要
-			// 現在は常に未登録として扱う
-			isEnrolled = false
-			enrollmentStatus = null
-			student = null
+			if (!data?.user || !space) {
+				// ログインしていない、またはスペース情報がない場合
+				isEnrolled = false
+				enrollmentStatus = null
+				student = null
+				return
+			}
+
+			// 登録状況チェック
+			const response = await fetch(`/api/students?spaceId=${space.id}`)
+			if (response.ok) {
+				const result = await response.json()
+				// このユーザーが登録されているか確認
+				const enrollment = result.students?.find((s: any) => s.student_id === data.user.id)
+				if (enrollment) {
+					isEnrolled = true
+					enrollmentStatus = enrollment.status
+					student = data.user
+				}
+			}
 		} catch (err) {
 			console.log('Check enrollment error:', err)
 		} finally {
@@ -178,11 +196,11 @@
 												マイページ
 											</a>
 										{:else}
-											<a href="/{username}/space/{slug}/student/login" class="font-medium transition-colors hover:opacity-70" style="color: {section.textColor || '#111827'}">
-												生徒ログイン
+											<a href="/{username}/space/{slug}/login" class="font-medium transition-colors hover:opacity-70" style="color: {section.textColor || '#111827'}">
+												ログイン
 											</a>
-											<a href="/{username}/space/{slug}/enroll" class="text-white px-4 py-2 rounded-lg font-medium transition-opacity hover:opacity-90" style="background-color: {theme.primaryColor}">
-												生徒登録
+											<a href="/{username}/space/{slug}/register" class="text-white px-4 py-2 rounded-lg font-medium transition-opacity hover:opacity-90" style="background-color: {theme.primaryColor}">
+												登録
 											</a>
 										{/if}
 									{/if}
@@ -424,11 +442,11 @@
 										マイページ
 									</a>
 								{:else}
-									<a href="/{username}/space/{slug}/student/login" class="text-gray-900 font-medium hover:text-blue-600 transition-colors">
-										生徒ログイン
+									<a href="/{username}/space/{slug}/login" class="text-gray-900 font-medium hover:text-blue-600 transition-colors">
+										ログイン
 									</a>
-									<a href="/{username}/space/{slug}/enroll" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
-										生徒登録
+									<a href="/{username}/space/{slug}/register" class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors">
+										登録
 									</a>
 								{/if}
 							{/if}

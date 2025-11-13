@@ -27,44 +27,131 @@
 	})
 
 	onMount(async () => {
-		// TODO: 生徒管理機能の実装
+		await loadData()
 	})
 
 	async function loadData() {
-		// TODO: 生徒管理機能の実装が必要
-		// - 生徒一覧取得API
-		// - コース購入情報取得API
-		// を実装してからこの機能を有効化します
+		loading = true
+		error = ''
+
+		try {
+			// スペース情報を取得
+			const spaceRes = await fetch(`/api/spaces?username=${username}&slug=${slug}`)
+			if (!spaceRes.ok) {
+				throw new Error('スペース情報の取得に失敗しました')
+			}
+			const spaceData = await spaceRes.json()
+			space = spaceData.space
+
+			if (!space) {
+				throw new Error('スペースが見つかりません')
+			}
+
+			// 生徒一覧を取得
+			const studentsRes = await fetch(`/api/students?spaceId=${space.id}`)
+			if (!studentsRes.ok) {
+				throw new Error('生徒一覧の取得に失敗しました')
+			}
+			const studentsData = await studentsRes.json()
+			students = studentsData.students || []
+
+		} catch (err: any) {
+			error = err.message
+			console.error('Load data error:', err)
+		} finally {
+			loading = false
+		}
 	}
-	
+
 	async function updateStudentStatus(studentId: string, newStatus: string) {
-		alert('生徒ステータス変更機能は現在実装中です')
-		// TODO: 生徒ステータス更新APIの実装が必要
+		try {
+			const res = await fetch('/api/students', {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					studentRecordId: studentId,
+					status: newStatus
+				})
+			})
+
+			if (!res.ok) {
+				const data = await res.json()
+				throw new Error(data.error || 'ステータス更新に失敗しました')
+			}
+
+			// ローカル更新
+			students = students.map(s =>
+				s.id === studentId ? { ...s, status: newStatus } : s
+			)
+
+		} catch (err: any) {
+			alert(err.message)
+			console.error('Update status error:', err)
+		}
 	}
-	
+
 	async function removeStudent(studentId: string) {
-		alert('生徒除籍機能は現在実装中です')
-		// TODO: 生徒除籍APIの実装が必要
+		if (!confirm('本当にこの生徒を除籍しますか？この操作は取り消せません。')) {
+			return
+		}
+
+		try {
+			const res = await fetch(`/api/students?studentRecordId=${studentId}`, {
+				method: 'DELETE'
+			})
+
+			if (!res.ok) {
+				const data = await res.json()
+				throw new Error(data.error || '生徒の除籍に失敗しました')
+			}
+
+			// ローカル削除
+			students = students.filter(s => s.id !== studentId)
+
+		} catch (err: any) {
+			alert(err.message)
+			console.error('Remove student error:', err)
+		}
 	}
-	
+
 	async function inviteStudent() {
 		inviteLoading = true
 		inviteError = ''
 		inviteSuccess = ''
-		
+
 		try {
 			if (!inviteEmail) {
 				throw new Error('メールアドレスを入力してください')
 			}
-			
-			// メール招待の実装（簡略化）
-			// 実際の実装では、メール送信やトークン生成が必要
-			inviteSuccess = `${inviteEmail} に招待メールを送信しました`
+
+			if (!space) {
+				throw new Error('スペース情報が見つかりません')
+			}
+
+			const res = await fetch('/api/students', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					spaceId: space.id,
+					email: inviteEmail
+				})
+			})
+
+			if (!res.ok) {
+				const data = await res.json()
+				throw new Error(data.error || '生徒の追加に失敗しました')
+			}
+
+			inviteSuccess = `${inviteEmail} をスペースに追加しました`
 			inviteEmail = ''
 			showInviteForm = false
-			
+
+			// 生徒一覧を再読み込み
+			await loadData()
+
 		} catch (err: any) {
 			inviteError = err.message
+			console.error('Invite student error:', err)
 		} finally {
 			inviteLoading = false
 		}

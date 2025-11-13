@@ -7,7 +7,7 @@ export const POST: RequestHandler = async ({ cookies, platform }) => {
 		const sessionToken = cookies.get('session_token');
 
 		if (sessionToken) {
-			const db = getD1(platform);
+			const db = await getD1(platform);
 			await SessionManager.deleteSession(db, sessionToken);
 		}
 

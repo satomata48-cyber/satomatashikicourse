@@ -25,8 +25,14 @@
 	// スペース情報を取得
 	async function loadSpaceInfo() {
 		try {
-			// TODO: D1実装が必要 - スペース情報の取得
-			error = 'この機能は現在実装中です'
+			const response = await fetch(`/api/spaces?username=${username}&slug=${slug}`)
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'スペースの読み込みに失敗しました')
+			}
+
+			space = result.space
 		} catch (err: any) {
 			console.error('Space load error:', err)
 			error = err.message
@@ -42,12 +48,34 @@
 		}
 
 		loading = true
-		error = 'ログイン機能は現在実装中です。D1データベースへの移行が必要です。'
-		loading = false
+		error = ''
+
+		try {
+			// ログインAPIを呼び出す
+			const response = await fetch('/api/auth/login', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email, password })
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'ログインに失敗しました')
+			}
+
+			// ログイン成功 - 生徒ダッシュボードにリダイレクト
+			await goto(`/${username}/space/${slug}/student`)
+		} catch (err: any) {
+			error = err.message || 'ログインに失敗しました'
+			console.error('Login error:', err)
+		} finally {
+			loading = false
+		}
 	}
 
 	function navigateToEnroll() {
-		goto(`/${username}/space/${slug}/enroll`)
+		goto(`/${username}/space/${slug}/register`)
 	}
 
 	function navigateToSpace() {
@@ -91,7 +119,7 @@
 			<!-- Space Logo and Title -->
 			<div class="text-center mb-8">
 				<h1 class="text-3xl font-bold text-gray-900 mb-2">ログイン</h1>
-				<p class="text-gray-600">この機能は現在実装中です</p>
+				<p class="text-gray-600">{space.title}で学習を続けましょう</p>
 			</div>
 
 			<!-- Login Form -->
@@ -107,9 +135,44 @@
 					</div>
 				{/if}
 
-				<p class="text-center text-gray-600">
-					ログイン機能はD1データベース実装後に利用可能になります。
-				</p>
+				<form on:submit|preventDefault={handleLogin} class="space-y-6">
+					<div>
+						<label for="email" class="block text-sm font-medium text-gray-700 mb-2">
+							メールアドレス
+						</label>
+						<input
+							id="email"
+							type="email"
+							bind:value={email}
+							required
+							class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+							placeholder="example@email.com"
+						/>
+					</div>
+
+					<div>
+						<label for="password" class="block text-sm font-medium text-gray-700 mb-2">
+							パスワード
+						</label>
+						<input
+							id="password"
+							type="password"
+							bind:value={password}
+							required
+							minlength="6"
+							class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+							placeholder="パスワードを入力"
+						/>
+					</div>
+
+					<button
+						type="submit"
+						disabled={loading}
+						class="w-full bg-blue-600 text-white py-3 px-6 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+					>
+						{loading ? 'ログイン中...' : 'ログイン'}
+					</button>
+				</form>
 			</div>
 
 			<!-- Enrollment Link -->
@@ -119,7 +182,7 @@
 					on:click={navigateToEnroll}
 					class="font-medium text-blue-600 hover:text-blue-500 transition-colors"
 				>
-					生徒登録
+					登録
 				</button>
 			</p>
 		</div>

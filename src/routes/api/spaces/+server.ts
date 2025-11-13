@@ -11,7 +11,7 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 			return json({ error: 'Username is required' }, { status: 400 });
 		}
 
-		const db = getD1(platform);
+		const db = await getD1(platform);
 
 		// ユーザー名からユーザーIDを取得
 		const user = await ProfileManager.getUserByUsername(db, username);
@@ -64,7 +64,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			return json({ error: 'Title and slug are required' }, { status: 400 });
 		}
 
-		const db = getD1(platform);
+		const db = await getD1(platform);
 
 		// スラッグの重複チェック
 		const existingSpace = await SpaceManager.getSpaceBySlug(db, locals.user.id, slug);
@@ -102,7 +102,7 @@ export const PUT: RequestHandler = async ({ request, locals, platform }) => {
 			return json({ error: 'Space ID is required' }, { status: 400 });
 		}
 
-		const db = getD1(platform);
+		const db = await getD1(platform);
 
 		// スペースの所有者確認
 		const space = await SpaceManager.getSpaceById(db, id);
@@ -145,7 +145,7 @@ export const DELETE: RequestHandler = async ({ url, locals, platform }) => {
 			return json({ error: 'Space ID is required' }, { status: 400 });
 		}
 
-		const db = getD1(platform);
+		const db = await getD1(platform);
 
 		// スペースの所有者確認
 		const space = await SpaceManager.getSpaceById(db, spaceId);
