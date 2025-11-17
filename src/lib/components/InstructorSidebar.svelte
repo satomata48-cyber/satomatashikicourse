@@ -33,11 +33,6 @@
 			name: '生徒ページ管理',
 			href: `/student-pages`,
 			icon: 'student-pages'
-		},
-		{
-			name: '講師プロフィール',
-			href: `/instructor-profiles`,
-			icon: 'profiles'
 		}
 	]
 

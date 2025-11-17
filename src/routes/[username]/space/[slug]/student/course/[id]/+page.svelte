@@ -194,8 +194,8 @@
 			</div>
 		</div>
 		
-		<!-- 購入が必要な場合の表示 -->
-		{#if !course.is_free && !hasPurchased}
+		<!-- 購入が必要な場合の表示（無料・有料問わず） -->
+		{#if !hasPurchased}
 			<div class="max-w-4xl mx-auto mt-12 px-6">
 				<div class="bg-white rounded-lg shadow-lg p-8 text-center">
 					<div class="mb-6">
@@ -203,19 +203,23 @@
 							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
 						</svg>
 					</div>
-					<h2 class="text-3xl font-bold text-gray-900 mb-4">このコースは有料です</h2>
+					<h2 class="text-3xl font-bold text-gray-900 mb-4">
+						{course.is_free ? 'このコースは無料です' : 'このコースは有料です'}
+					</h2>
 					<p class="text-xl text-gray-600 mb-8">
-						このコースにアクセスするには購入が必要です
+						{course.is_free
+							? 'このコースにアクセスするには「受講開始」が必要です'
+							: 'このコースにアクセスするには購入が必要です'}
 					</p>
 
 					<div class="mb-8 p-6 bg-gray-50 rounded-lg">
 						<div class="text-4xl font-bold text-blue-600 mb-2">
-							{new Intl.NumberFormat('ja-JP', {
+							{course.is_free ? '¥0' : new Intl.NumberFormat('ja-JP', {
 								style: 'currency',
 								currency: course.currency || 'JPY'
 							}).format(course.price)}
 						</div>
-						<div class="text-sm text-gray-500">一度購入すると、無制限にアクセスできます</div>
+						<div class="text-sm text-gray-500">一度{course.is_free ? '受講開始' : '購入'}すると、無制限にアクセスできます</div>
 					</div>
 
 					<div class="flex flex-col items-center space-y-4">
@@ -223,7 +227,7 @@
 							href="/{username}/space/{slug}/course/{course.id}/purchase"
 							class="w-full md:w-auto px-8 py-4 bg-blue-600 text-white text-lg font-semibold rounded-lg hover:bg-blue-700 transition-colors"
 						>
-							このコースを購入する
+							{course.is_free ? '無料で受講開始' : 'このコースを購入する'}
 						</a>
 						<a
 							href="/{username}/space/{slug}/student/courses"

@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { getD1, ProfileManager } from '$lib/server/d1-db';
+import { getD1, InstructorManager } from '$lib/server/d1-db';
 
 /**
  * GET /api/profile
@@ -22,9 +22,9 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 		let profile;
 
 		if (username) {
-			profile = await ProfileManager.getUserByUsername(db, username);
+			profile = await InstructorManager.getInstructorByUsername(db, username);
 		} else if (id) {
-			profile = await ProfileManager.getUserById(db, id);
+			profile = await InstructorManager.getInstructorById(db, id);
 		}
 
 		if (!profile) {

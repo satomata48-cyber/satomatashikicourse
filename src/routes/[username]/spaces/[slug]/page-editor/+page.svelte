@@ -25,6 +25,11 @@
 		backgroundColor?: string
 		textColor?: string
 		instructorProfileId?: string  // 講師プロフィールID
+		instructorName?: string  // 講師名（セクション固有）
+		videoUrl?: string  // 動画URL
+		videoType?: string  // 動画タイプ（youtube / external）
+		linkUrl?: string  // 添付ファイルURL
+		linkTitle?: string  // 添付ファイルタイトル
 		features?: Array<{
 			icon: string
 			title: string
@@ -142,57 +147,13 @@
 	// セクションテンプレート
 	const templates = [
 		{
-			name: 'ヘッダー',
-			icon: '📌',
-			description: 'ナビゲーションバー',
-			template: {
-				type: 'header',
-				title: 'ヘッダー',
-				content: 'スペース名とナビゲーションを表示',
-				imageUrl: '',
-				buttonText: '',
-				buttonUrl: '',
-				backgroundColor: '#ffffff',
-				textColor: '#111827'
-			}
-		},
-		{
-			name: 'ヒーローセクション',
-			icon: '🎯',
-			description: '大きな見出しとCTAボタン',
-			template: {
-				type: 'hero',
-				title: 'あなたのコースタイトル',
-				content: 'このコースで学べることの魅力的な説明を書きましょう',
-				buttonText: '学習を始める',
-				buttonUrl: '#',
-				backgroundColor: '#2563eb',
-				textColor: '#ffffff'
-			}
-		},
-		{
-			name: 'コース一覧',
-			icon: '📚',
-			description: '提供コースの一覧表示',
-			template: {
-				type: 'courses',
-				title: '提供コース',
-				content: '質の高い学習コンテンツをご用意しています',
-				imageUrl: '',
-				buttonText: '',
-				buttonUrl: '',
-				backgroundColor: '#ffffff',
-				textColor: '#111827'
-			}
-		},
-		{
-			name: 'テキストセクション',
+			name: 'テキストコンテンツ',
 			icon: '📝',
-			description: 'シンプルなテキストコンテンツ',
+			description: 'テキストや説明を追加',
 			template: {
 				type: 'text',
-				title: 'セクションタイトル',
-				content: 'ここに詳細な説明を書きます。複数段落にわたる長い文章も書けます。',
+				title: 'テキストセクション',
+				content: 'ここにテキストや説明を入力します。',
 				imageUrl: '',
 				buttonText: '',
 				buttonUrl: '',
@@ -201,49 +162,15 @@
 			}
 		},
 		{
-			name: '画像+テキスト',
-			icon: '🖼️',
-			description: '画像とテキストを横並び',
+			name: '動画',
+			icon: '🎥',
+			description: 'YouTube動画を追加',
 			template: {
-				type: 'image-text',
-				title: '特徴やメリット',
-				content: '画像と一緒に説明を表示します。商品の特徴や使い方を視覚的に伝えられます。',
-				imageUrl: 'https://via.placeholder.com/400x300',
-				buttonText: '',
-				buttonUrl: '',
-				backgroundColor: '#ffffff',
-				textColor: '#111827'
-			}
-		},
-		{
-			name: '特徴リスト',
-			icon: '✨',
-			description: '箇条書きで特徴を列挙',
-			template: {
-				type: 'features',
-				title: 'このコースの特徴',
-				content: '• 実践的なスキル: すぐに使える知識とテクニック\n• プロフェッショナルな指導: 業界経験豊富な講師による丁寧なサポート\n• 柔軟な学習: 自分のペースで、いつでもどこでも学習可能\n• 実績あるカリキュラム: 多くの受講生が成果を実感',
-				imageUrl: '',
-				buttonText: '',
-				buttonUrl: '',
-				backgroundColor: '#ffffff',
-				textColor: '#111827',
-				features: [
-					{ icon: '⚙️', title: '実践的なスキル', description: 'すぐに使える知識とテクニック' },
-					{ icon: '👥', title: 'プロフェッショナルな指導', description: '業界経験豊富な講師による丁寧なサポート' },
-					{ icon: '⏰', title: '柔軟な学習', description: '自分のペースで、いつでもどこでも学習可能' },
-					{ icon: '✓', title: '実績あるカリキュラム', description: '多くの受講生が成果を実感' }
-				]
-			}
-		},
-		{
-			name: '講師紹介',
-			icon: '👨‍🏫',
-			description: '講師プロフィールセクション',
-			template: {
-				type: 'instructor',
-				title: '講師紹介',
-				content: '講師のプロフィールと経歴を紹介します',
+				type: 'video',
+				title: '動画セクション',
+				content: '',
+				videoUrl: '',
+				videoType: 'youtube',
 				imageUrl: '',
 				buttonText: '',
 				buttonUrl: '',
@@ -252,42 +179,15 @@
 			}
 		},
 		{
-			name: 'CTA (行動喚起)',
-			icon: '🚀',
-			description: '目立つボタンで行動を促す',
+			name: '添付ファイル',
+			icon: '📎',
+			description: '外部リンクを添付',
 			template: {
-				type: 'cta',
-				title: '今すぐ始めましょう',
-				content: '特別価格で提供中!この機会をお見逃しなく。',
-				buttonText: '無料で始める',
-				buttonUrl: '#',
-				backgroundColor: '#ffffff',
-				textColor: '#111827'
-			}
-		},
-		{
-			name: 'FAQ',
-			icon: '❓',
-			description: 'よくある質問',
-			template: {
-				type: 'faq',
-				title: 'よくある質問',
-				content: 'Q: 質問1\nA: 回答1\n\nQ: 質問2\nA: 回答2',
-				imageUrl: '',
-				buttonText: '',
-				buttonUrl: '',
-				backgroundColor: '#ffffff',
-				textColor: '#111827'
-			}
-		},
-		{
-			name: 'フッター',
-			icon: '📄',
-			description: 'ページ下部の著作権表示',
-			template: {
-				type: 'footer',
-				title: 'フッター',
-				content: '© 2025 Your Company. All rights reserved.',
+				type: 'attachment',
+				title: '添付ファイルセクション',
+				content: '',
+				linkUrl: '',
+				linkTitle: '',
 				imageUrl: '',
 				buttonText: '',
 				buttonUrl: '',
@@ -424,8 +324,21 @@
 				]
 			}
 
-			// TODO: 講師プロフィール機能は未実装
-			instructorProfiles = []
+			// 講師プロフィール一覧を取得
+			try {
+				const profilesResponse = await fetch('/api/instructor-profiles')
+				const profilesResult = await profilesResponse.json()
+
+				if (profilesResponse.ok) {
+					instructorProfiles = profilesResult.profiles || []
+				} else {
+					console.warn('Failed to load instructor profiles:', profilesResult.error)
+					instructorProfiles = []
+				}
+			} catch (profileErr) {
+				console.warn('Error loading instructor profiles:', profileErr)
+				instructorProfiles = []
+			}
 
 		} catch (err: any) {
 			error = err.message
@@ -525,6 +438,11 @@
 	function getSectionIcon(type: string): string {
 		const template = templates.find(t => t.template.type === type)
 		return template?.icon || '📄'
+	}
+
+	function getYouTubeId(url: string): string {
+		const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)
+		return match ? match[1] : ''
 	}
 
 	function resetToIdealLayout() {
@@ -789,23 +707,66 @@
 												>
 													<option value="">講師プロフィールを選択...</option>
 													{#each instructorProfiles as profile}
-														<option value={profile.id}>{profile.display_name} (@{profile.username})</option>
+														<option value={profile.id}>{profile.display_name}</option>
 													{/each}
 												</select>
+												<!-- 講師名（カスタマイズ可能） -->
+												<input
+													type="text"
+													bind:value={section.instructorName}
+													class="w-full text-xs border border-gray-300 rounded px-2 py-1 mb-2"
+													placeholder="講師名（省略時はプロフィールの名前を使用）"
+												/>
 											{/if}
-											{#if section.type !== 'features' && section.type !== 'instructor'}
+											{#if section.type === 'text'}
 												<textarea
 													bind:value={section.content}
 													rows="2"
 													class="w-full text-xs border border-gray-300 rounded px-2 py-1"
 													placeholder="コンテンツ"
 												></textarea>
+											{:else if section.type === 'video'}
+												<!-- 動画セクション -->
+												<select
+													bind:value={section.videoType}
+													class="w-full text-xs border border-gray-300 rounded px-2 py-1 mb-2"
+												>
+													<option value="youtube">YouTube</option>
+													<option value="external">外部リンク</option>
+												</select>
+												<input
+													type="url"
+													bind:value={section.videoUrl}
+													class="w-full text-xs border border-gray-300 rounded px-2 py-1"
+													placeholder={section.videoType === 'youtube' ? 'https://www.youtube.com/watch?v=...' : 'https://video-storage-url...'}
+												/>
+											{:else if section.type === 'attachment'}
+												<!-- 添付ファイルセクション -->
+												<input
+													type="text"
+													bind:value={section.linkTitle}
+													class="w-full text-xs border border-gray-300 rounded px-2 py-1 mb-2"
+													placeholder="リンクのタイトル（オプション）"
+												/>
+												<input
+													type="url"
+													bind:value={section.linkUrl}
+													class="w-full text-xs border border-gray-300 rounded px-2 py-1"
+													placeholder="https://..."
+												/>
 											{:else if section.type === 'instructor'}
 												<textarea
 													bind:value={section.content}
 													rows="2"
 													class="w-full text-xs border border-gray-300 rounded px-2 py-1"
-													placeholder="追加の説明文（任意）"
+													placeholder="自己紹介・経歴など（省略時はプロフィールの自己紹介を使用）"
+												></textarea>
+											{:else if section.type !== 'features'}
+												<textarea
+													bind:value={section.content}
+													rows="2"
+													class="w-full text-xs border border-gray-300 rounded px-2 py-1"
+													placeholder="コンテンツ"
 												></textarea>
 											{/if}
 											{#if section.type === 'image-text' || section.type === 'hero'}
@@ -1006,7 +967,7 @@
 												<div class="flex flex-col md:flex-row items-center space-y-4 md:space-y-0 md:space-x-6">
 													{#if selectedProfile}
 														{#if selectedProfile.avatar_url}
-															<img src={selectedProfile.avatar_url} alt={selectedProfile.display_name} class="h-24 w-24 rounded-full object-cover" />
+															<img src={selectedProfile.avatar_url} alt={section.instructorName || selectedProfile.display_name} class="h-24 w-24 rounded-full object-cover" />
 														{:else}
 															<div class="h-24 w-24 rounded-full bg-gray-300 flex items-center justify-center">
 																<svg class="h-12 w-12 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -1015,17 +976,14 @@
 															</div>
 														{/if}
 														<div class="flex-1 text-left">
-															<h3 class="text-xl font-semibold mb-2">{selectedProfile.display_name}</h3>
-															<p class="opacity-80">{selectedProfile.bio || section.content}</p>
-															{#if section.content && selectedProfile.bio}
-																<p class="mt-2 opacity-80">{section.content}</p>
-															{/if}
+															<h3 class="text-xl font-semibold mb-2">{section.instructorName || selectedProfile.display_name}</h3>
+															<p class="opacity-80">{section.content || selectedProfile.bio}</p>
 														</div>
 													{:else}
 														<div class="h-24 w-24 rounded-full bg-gray-300"></div>
 														<div class="flex-1 text-left">
-															<h3 class="text-xl font-semibold mb-2">講師名</h3>
-															<p class="opacity-80 text-gray-500 italic">講師プロフィールを選択してください</p>
+															<h3 class="text-xl font-semibold mb-2">{section.instructorName || '講師名'}</h3>
+															<p class="opacity-80">{section.content || '講師プロフィールを選択するか、講師名と自己紹介を入力してください'}</p>
 														</div>
 													{/if}
 												</div>
@@ -1109,8 +1067,93 @@
 											</div>
 										</div>
 									</footer>
+								{:else if section.type === 'video'}
+									<!-- 動画セクション -->
+									<section class="py-12 bg-white text-gray-900">
+										<div class="px-6">
+											<h3 class="text-2xl font-bold mb-4">{section.title}</h3>
+											{#if section.videoUrl}
+												{@const youtubeId = getYouTubeId(section.videoUrl)}
+												{#if section.videoType === 'youtube' && youtubeId}
+													<div class="max-w-4xl mx-auto">
+														<div class="border border-gray-200 rounded-lg overflow-hidden shadow-lg">
+															<div class="aspect-video bg-black">
+																<iframe
+																	src="https://www.youtube.com/embed/{youtubeId}"
+																	title={section.title}
+																	frameborder="0"
+																	allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+																	allowfullscreen
+																	class="w-full h-full"
+																></iframe>
+															</div>
+														</div>
+													</div>
+												{:else}
+													<div class="max-w-4xl mx-auto border border-gray-200 rounded-lg p-4 bg-gray-50">
+														<p class="text-sm text-gray-600 flex items-center">
+															<svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+															</svg>
+															動画URL: {section.videoUrl}
+														</p>
+													</div>
+												{/if}
+											{:else}
+												<div class="max-w-4xl mx-auto border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+													<p class="text-sm text-gray-400">動画URLを入力してください</p>
+												</div>
+											{/if}
+										</div>
+									</section>
+								{:else if section.type === 'attachment'}
+									<!-- 添付ファイルセクション -->
+									<section class="py-12 bg-white text-gray-900">
+										<div class="px-6">
+											<h3 class="text-2xl font-bold mb-4">{section.title}</h3>
+											{#if section.linkUrl}
+												<div class="max-w-4xl mx-auto">
+													<a
+														href={section.linkUrl}
+														target="_blank"
+														rel="noopener noreferrer"
+														class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-all group"
+													>
+														<div class="flex items-center space-x-3 flex-1 min-w-0">
+															<div class="flex-shrink-0 w-12 h-12 rounded flex items-center justify-center group-hover:bg-blue-200 transition-colors" style="background-color: {themeColor}20">
+																<svg class="h-6 w-6" style="color: {themeColor}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+																	<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+																</svg>
+															</div>
+															<div class="flex-1 min-w-0">
+																<p class="text-base font-medium text-gray-900 truncate group-hover:text-blue-700">
+																	{section.linkTitle || new URL(section.linkUrl).hostname || 'リンク'}
+																</p>
+																<p class="text-sm text-gray-500 truncate mt-0.5">{section.linkUrl}</p>
+															</div>
+														</div>
+														<svg class="h-5 w-5 text-gray-400 group-hover:text-blue-600 flex-shrink-0 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+														</svg>
+													</a>
+												</div>
+											{:else}
+												<div class="max-w-4xl mx-auto border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+													<p class="text-sm text-gray-400">リンクURLを入力してください</p>
+												</div>
+											{/if}
+										</div>
+									</section>
+								{:else if section.type === 'text'}
+									<!-- テキストセクション -->
+									<section class="py-12 bg-white text-gray-900">
+										<div class="px-6">
+											<h3 class="text-2xl font-bold mb-4">{section.title}</h3>
+											<p class="whitespace-pre-line opacity-80">{section.content}</p>
+										</div>
+									</section>
 								{:else}
-									<!-- デフォルト(テキスト) -->
+									<!-- デフォルト(その他) -->
 									<section class="py-12 bg-white text-gray-900">
 										<div class="px-6">
 											<h3 class="text-2xl font-bold mb-4">{section.title}</h3>

@@ -21,7 +21,14 @@
       "Bash(npm run deploy:*)",
       "Bash(npm uninstall:*)",
       "Bash(timeout /t 3)",
-      "Bash(nul)"
+      "Bash(nul)",
+      "Bash(npm run dev:*)",
+      "Bash(git checkout:*)",
+      "Bash(tasklist:*)",
+      "Bash(findstr:*)",
+      "Bash(taskkill:*)",
+      "Bash(cmd.exe /c \"taskkill /IM node.exe /F\")",
+      "Bash(npm run check:*)"
     ],
     "deny": [],
     "ask": []

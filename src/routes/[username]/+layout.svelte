@@ -25,7 +25,6 @@
 		if (currentPath?.includes('/courses')) return 'コース管理'
 		if (currentPath?.includes('/payment-settings')) return '決済設定'
 		if (currentPath?.includes('/student-pages')) return '生徒ページ管理'
-		if (currentPath?.includes('/instructor-profiles')) return '講師プロフィール管理'
 		if (currentPath?.includes('/profile')) return '講師プロフィール'
 		return '詳細'
 	}

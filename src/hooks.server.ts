@@ -67,15 +67,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 	const path = event.url.pathname;
 	const user = event.locals.user;
 
-	// ログインページと講師登録ページへのリダイレクトループを防ぐ
-	if ((path === '/login' || path === '/instructor/register') && user) {
-		if (user.username) {
-			throw redirect(302, `/${user.username}/dashboard`);
-		} else {
-			throw redirect(302, '/profile/setup');
-		}
-	}
-
 	// 認証が必要なルートの保護
 	const protectedPaths = ['/dashboard', '/profile/setup', '/instructor'];
 	const isProtectedPath = protectedPaths.some((p) => path.startsWith(p));

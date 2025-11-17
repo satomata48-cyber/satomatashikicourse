@@ -14,6 +14,14 @@
 	let space: any = null
 	let spaceLoading = true
 
+	// Password reset
+	let showResetModal = false
+	let resetEmail = ''
+	let resetLoading = false
+	let resetError = ''
+	let resetSuccess = false
+	let resetLink = ''
+
 	// リアクティブにパラメータが設定されたらデータを読み込み
 	$: if (username && slug && username !== 'undefined' && slug !== 'undefined') {
 		console.log('Loading space info for:', { username, slug })
@@ -85,6 +93,56 @@
 	function navigateToSpace() {
 		goto(`/${username}/space/${slug}`)
 	}
+
+	async function handlePasswordReset() {
+		if (!resetEmail) {
+			resetError = 'メールアドレスを入力してください'
+			return
+		}
+
+		resetLoading = true
+		resetError = ''
+		resetSuccess = false
+
+		try {
+			const response = await fetch('/api/auth/request-password-reset', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					email: resetEmail,
+					spaceId: space?.id
+				})
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'パスワードリセットに失敗しました')
+			}
+
+			// リセットリンクを表示（メール送信機能がないため）
+			resetLink = `${window.location.origin}/${username}/space/${slug}/reset-password?token=${result.token}`
+			resetSuccess = true
+		} catch (err: any) {
+			resetError = err.message || 'パスワードリセットに失敗しました'
+			console.error('Password reset error:', err)
+		} finally {
+			resetLoading = false
+		}
+	}
+
+	function copyResetLink() {
+		navigator.clipboard.writeText(resetLink)
+		alert('リセットリンクをコピーしました！')
+	}
+
+	function closeResetModal() {
+		showResetModal = false
+		resetEmail = ''
+		resetError = ''
+		resetSuccess = false
+		resetLink = ''
+	}
 </script>
 
 <svelte:head>
@@ -155,9 +213,18 @@
 					</div>
 
 					<div>
-						<label for="password" class="block text-sm font-medium text-gray-700 mb-2">
-							パスワード
-						</label>
+						<div class="flex justify-between items-center mb-2">
+							<label for="password" class="block text-sm font-medium text-gray-700">
+								パスワード
+							</label>
+							<button
+								type="button"
+								on:click={() => showResetModal = true}
+								class="text-sm text-blue-600 hover:text-blue-500 transition-colors"
+							>
+								パスワードを忘れた場合
+							</button>
+						</div>
 						<input
 							id="password"
 							type="password"
@@ -189,6 +256,112 @@
 					登録
 				</button>
 			</p>
+		</div>
+	</div>
+{/if}
+
+<!-- Password Reset Modal -->
+{#if showResetModal}
+	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center p-4 z-50">
+		<div class="bg-white rounded-2xl shadow-2xl max-w-md w-full p-8">
+			<div class="flex justify-between items-center mb-6">
+				<h2 class="text-2xl font-bold text-gray-900">パスワードリセット</h2>
+				<button
+					on:click={closeResetModal}
+					class="text-gray-400 hover:text-gray-600 transition-colors"
+				>
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+					</svg>
+				</button>
+			</div>
+
+			{#if !resetSuccess}
+				<p class="text-gray-600 mb-6">
+					登録したメールアドレスを入力してください。パスワードリセット用のリンクを発行します。
+				</p>
+
+				{#if resetError}
+					<div class="bg-red-50 border border-red-200 rounded-lg p-3 mb-4">
+						<p class="text-sm text-red-800">{resetError}</p>
+					</div>
+				{/if}
+
+				<form on:submit|preventDefault={handlePasswordReset} class="space-y-4">
+					<div>
+						<label for="reset-email" class="block text-sm font-medium text-gray-700 mb-2">
+							メールアドレス
+						</label>
+						<input
+							id="reset-email"
+							type="email"
+							bind:value={resetEmail}
+							required
+							class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent transition-colors"
+							placeholder="example@email.com"
+						/>
+					</div>
+
+					<div class="flex space-x-3">
+						<button
+							type="button"
+							on:click={closeResetModal}
+							class="flex-1 px-4 py-3 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors font-medium"
+						>
+							キャンセル
+						</button>
+						<button
+							type="submit"
+							disabled={resetLoading}
+							class="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
+						>
+							{resetLoading ? '送信中...' : 'リセットリンクを発行'}
+						</button>
+					</div>
+				</form>
+			{:else}
+				<div class="space-y-4">
+					<div class="bg-green-50 border border-green-200 rounded-lg p-4 mb-4">
+						<div class="flex items-start">
+							<svg class="w-5 h-5 text-green-400 mr-2 flex-shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
+							</svg>
+							<p class="text-sm text-green-800">パスワードリセットリンクを発行しました！</p>
+						</div>
+					</div>
+
+					<p class="text-sm text-gray-600 mb-4">
+						以下のリンクをコピーして、新しいタブで開いてください。リンクは1時間有効です。
+					</p>
+
+					<div class="bg-gray-50 border border-gray-200 rounded-lg p-3 break-all text-sm">
+						{resetLink}
+					</div>
+
+					<div class="flex space-x-3">
+						<button
+							on:click={copyResetLink}
+							class="flex-1 bg-blue-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-blue-700 transition-colors"
+						>
+							リンクをコピー
+						</button>
+						<a
+							href={resetLink}
+							target="_blank"
+							class="flex-1 bg-green-600 text-white py-3 px-4 rounded-lg font-semibold hover:bg-green-700 transition-colors text-center"
+						>
+							リンクを開く
+						</a>
+					</div>
+
+					<button
+						on:click={closeResetModal}
+						class="w-full mt-4 px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+					>
+						閉じる
+					</button>
+				</div>
+			{/if}
 		</div>
 	</div>
 {/if}

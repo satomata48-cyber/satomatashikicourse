@@ -8,6 +8,10 @@ binding = "DB"
 database_name = "satomatashiki-course-db"
 database_id = "d2cce4ab-61f5-4323-a10a-726a3d42a6f1"
 
+[[r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "satomatashikicourse"
+
 [env.production]
 vars = { }
 
@@ -15,3 +19,7 @@ vars = { }
 binding = "DB"
 database_name = "satomatashiki-course-db"
 database_id = "d2cce4ab-61f5-4323-a10a-726a3d42a6f1"
+
+[[env.production.r2_buckets]]
+binding = "MEDIA_BUCKET"
+bucket_name = "satomatashikicourse"

@@ -42,11 +42,15 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			title,
 			description,
 			content,
+			content_before,
+			content_after,
 			video_url,
 			video_type,
 			duration,
 			order_index,
-			is_published
+			is_published,
+			attachments,
+			sections
 		} = await request.json();
 
 		if (!course_id || !title) {
@@ -73,11 +77,15 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			title,
 			description,
 			content,
+			content_before,
+			content_after,
 			video_url,
 			video_type,
 			duration,
 			order_index,
-			is_published: is_published !== undefined ? is_published : false
+			is_published: is_published !== undefined ? is_published : false,
+			attachments,
+			sections
 		});
 
 		return json({ lesson: newLesson });

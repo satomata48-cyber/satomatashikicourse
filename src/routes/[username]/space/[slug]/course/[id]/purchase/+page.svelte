@@ -1,89 +1,49 @@
 <script lang="ts">
-	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
 	import { goto } from '$app/navigation'
-	import { createCheckoutSession } from '$lib/stripe'
 
 	export let data
 
 	$: username = $page.params.username
 	$: slug = $page.params.slug
-	$: courseId = $page.params.id
+	$: course = data.course
+	$: space = data.space
+	$: user = data.user
 
-	let course: any = null
-	let space: any = null
-	let user: any = null
-	let loading = true
-	let purchasing = false
+	let processing = false
 	let error = ''
-	let alreadyPurchased = false
 
-	onMount(async () => {
-		await loadCourseData()
-	})
+	async function handleFreePurchase() {
+		processing = true
+		error = ''
 
-	async function loadCourseData() {
 		try {
-			// courseIdがUUIDかslugかを判定
-			const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(courseId)
-
-			let response;
-			if (isUUID) {
-				// UUIDの場合は従来通りID検索
-				response = await fetch(`/api/courses?id=${courseId}`)
-			} else {
-				// slugの場合はslug検索
-				response = await fetch(`/api/courses?username=${username}&space_slug=${slug}&slug=${courseId}`)
-			}
+			const response = await fetch('/api/courses/purchase-free', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					courseId: course.id,
+					studentId: user.id
+				})
+			})
 
 			const result = await response.json()
 
 			if (!response.ok) {
-				throw new Error(result.error || 'コースの取得に失敗しました')
+				throw new Error(result.error || '購入処理に失敗しました')
 			}
 
-			course = result.course
-			space = result.space
-
-			// TODO: ユーザーログイン状態と購入状態の確認
-			user = null
-			alreadyPurchased = false
-
+			// 成功したらコースページにリダイレクト
+			await goto(`/${username}/space/${slug}/student/course/${course.id}`)
 		} catch (err: any) {
 			error = err.message
-			console.error('Load course error:', err)
+			console.error('Free purchase error:', err)
 		} finally {
-			loading = false
+			processing = false
 		}
 	}
 
-	async function handlePurchase() {
-		console.log('handlePurchase called - user:', user)
-		if (!user) {
-			console.log('No user found, redirecting to login')
-			// スペース固有のログインページにリダイレクト
-			goto(`/${username}/space/${slug}/student/login`)
-			return
-		}
-
-		if (!course.stripe_price_id) {
-			error = 'この商品は現在購入できません'
-			return
-		}
-
-		purchasing = true
-		error = ''
-
-		try {
-			// TODO: D1実装が必要 - Stripe決済処理
-			throw new Error('この機能は現在実装中です')
-		} catch (err: any) {
-			error = `購入エラー: ${err.message}`
-			purchasing = false
-		}
-	}
-	
-	function formatCurrency(price: number, currency: string): string {
+	function formatCurrency(price: number, currency: string = 'JPY'): string {
 		return new Intl.NumberFormat('ja-JP', {
 			style: 'currency',
 			currency: currency
@@ -92,137 +52,115 @@
 </script>
 
 <svelte:head>
-	<title>{course?.title} - 購入 | {space?.title}</title>
+	<title>{course?.title} - {course?.is_free ? '受講開始' : '購入'} | {space?.title}</title>
 </svelte:head>
 
-<div class="min-h-screen bg-gray-50">
-	{#if loading}
-		<div class="flex justify-center items-center h-64">
-			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+<div class="min-h-screen bg-gray-50 py-12 px-4 sm:px-6 lg:px-8">
+	<div class="max-w-3xl mx-auto">
+		<!-- ヘッダー -->
+		<div class="text-center mb-8">
+			<h1 class="text-3xl font-bold text-gray-900 mb-2">
+				{course.is_free ? 'コースの受講開始' : 'コースの購入'}
+			</h1>
+			<p class="text-gray-600">
+				{course.is_free
+					? '以下のコースを無料で受講できます'
+					: '以下のコースを購入します'}
+			</p>
 		</div>
-	{:else if error && !course}
-		<div class="max-w-2xl mx-auto pt-20 px-4">
-			<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+
+		<!-- コース情報カード -->
+		<div class="bg-white rounded-lg shadow-lg overflow-hidden mb-6">
+			{#if course.thumbnail_url}
+				<img src={course.thumbnail_url} alt={course.title} class="w-full h-64 object-cover" />
+			{/if}
+			<div class="p-8">
+				<h2 class="text-2xl font-bold text-gray-900 mb-4">{course.title}</h2>
+				<p class="text-gray-600 mb-6">{course.description}</p>
+
+				<div class="border-t border-gray-200 pt-6">
+					<div class="flex justify-between items-center mb-4">
+						<span class="text-lg font-medium text-gray-900">価格</span>
+						<span class="text-3xl font-bold text-blue-600">
+							{course.is_free ? '¥0 (無料)' : formatCurrency(course.price, course.currency)}
+						</span>
+					</div>
+
+					<div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+						<h3 class="font-medium text-blue-900 mb-2">コース内容</h3>
+						<ul class="space-y-2 text-sm text-blue-800">
+							<li class="flex items-start">
+								<svg class="h-5 w-5 text-blue-600 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+								</svg>
+								無制限にアクセス可能
+							</li>
+							<li class="flex items-start">
+								<svg class="h-5 w-5 text-blue-600 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+								</svg>
+								すべてのレッスンにアクセス可能
+							</li>
+							<li class="flex items-start">
+								<svg class="h-5 w-5 text-blue-600 mr-2 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"/>
+								</svg>
+								進捗管理機能
+							</li>
+						</ul>
+					</div>
+				</div>
+			</div>
+		</div>
+
+		<!-- エラー表示 -->
+		{#if error}
+			<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-6">
 				{error}
 			</div>
-		</div>
-	{:else if course}
-		<div class="max-w-2xl mx-auto pt-10 px-4">
-			<!-- Back Link -->
-			<a 
-				href="/{username}/space/{slug}/course/{courseId}"
-				class="inline-flex items-center text-gray-600 hover:text-gray-900 mb-6"
-			>
-				<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 19l-7-7 7-7"/>
-				</svg>
-				コースに戻る
-			</a>
-			
-			<!-- Course Purchase Card -->
-			<div class="bg-white rounded-lg shadow-lg overflow-hidden">
-				<!-- Header -->
-				<div class="bg-gradient-to-r from-blue-600 to-purple-600 text-white p-6">
-					<h1 class="text-2xl font-bold mb-2">{course.title}</h1>
-					<p class="text-blue-100">スペース: {space.title}</p>
+		{/if}
+
+		<!-- 購入ボタン -->
+		<div class="bg-white rounded-lg shadow p-6">
+			{#if course.is_free}
+				<button
+					on:click={handleFreePurchase}
+					disabled={processing}
+					class="w-full bg-blue-600 text-white py-4 px-6 rounded-lg text-lg font-semibold hover:bg-blue-700 transition-colors disabled:bg-gray-400 disabled:cursor-not-allowed"
+				>
+					{processing ? '処理中...' : '無料で受講開始'}
+				</button>
+			{:else}
+				<div class="bg-yellow-50 border border-yellow-200 rounded-lg p-4 mb-4">
+					<p class="text-sm text-yellow-800">
+						<strong>注意:</strong> 有料コースの決済機能は現在開発中です。Stripe連携が必要です。
+					</p>
 				</div>
-				
-				<!-- Content -->
-				<div class="p-6 space-y-6">
-					{#if course.description}
-						<div>
-							<h3 class="text-lg font-medium text-gray-900 mb-2">コース概要</h3>
-							<p class="text-gray-600">{course.description}</p>
-						</div>
-					{/if}
-					
-					<!-- Price -->
-					<div class="bg-gray-50 rounded-lg p-4">
-						<div class="flex justify-between items-center">
-							<div>
-								<h3 class="text-lg font-medium text-gray-900">価格</h3>
-								{#if course.is_free}
-									<p class="text-2xl font-bold text-green-600">無料</p>
-								{:else}
-									<p class="text-3xl font-bold text-gray-900">
-										{formatCurrency(course.price, course.currency)}
-									</p>
-								{/if}
-							</div>
-							<div class="text-right text-sm text-gray-500">
-								<p>一度の購入で</p>
-								<p>永続アクセス</p>
-							</div>
-						</div>
-					</div>
-					
-					<!-- Purchase Status/Button -->
-					{#if error}
-						<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-							{error}
-						</div>
-					{/if}
-					
-					{#if alreadyPurchased}
-						<div class="bg-green-50 border border-green-200 rounded-lg p-4">
-							<div class="flex items-center">
-								<svg class="h-6 w-6 text-green-400 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-								</svg>
-								<div>
-									<p class="font-medium text-green-800">購入済み</p>
-									<p class="text-sm text-green-600">このコースは既に購入されています</p>
-								</div>
-							</div>
-							<a
-								href="/{username}/space/{slug}/student/course/{courseId}"
-								class="mt-3 inline-flex items-center px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
-							>
-								コースを受講する
-							</a>
-						</div>
-					{:else if !user}
-						<div class="text-center">
-							<p class="text-gray-600 mb-4">購入するにはログインが必要です</p>
-							<a
-								href="/login?redirect={encodeURIComponent($page.url.pathname)}"
-								class="inline-flex items-center px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
-							>
-								ログインして購入
-							</a>
-						</div>
-					{:else if course.is_free}
-						<button
-							on:click={handlePurchase}
-							disabled={purchasing}
-							class="w-full px-6 py-3 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50 font-medium"
-						>
-							{purchasing ? '登録中...' : '無料で受講開始'}
-						</button>
-					{:else}
-						<button
-							on:click={handlePurchase}
-							disabled={purchasing || !course.stripe_price_id}
-							class="w-full px-6 py-3 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50 font-medium"
-						>
-							{purchasing ? '処理中...' : `${formatCurrency(course.price, course.currency)} で購入`}
-						</button>
-					{/if}
-					
-					<!-- Security Notice -->
-					<div class="bg-blue-50 rounded-lg p-4">
-						<div class="flex items-start">
-							<svg class="h-5 w-5 text-blue-400 mt-0.5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
-							</svg>
-							<div class="text-sm text-blue-700">
-								<p class="font-medium mb-1">安全な決済</p>
-								<p>決済はStripeにより安全に処理されます。カード情報は当サイトに保存されません。</p>
-							</div>
-						</div>
-					</div>
-				</div>
+				<button
+					disabled
+					class="w-full bg-gray-400 text-white py-4 px-6 rounded-lg text-lg font-semibold cursor-not-allowed"
+				>
+					Stripe決済（準備中）
+				</button>
+			{/if}
+
+			<div class="mt-4 text-center">
+				<a
+					href="/{username}/space/{slug}/student/course/{course.id}"
+					class="text-blue-600 hover:text-blue-800 text-sm"
+				>
+					コースページに戻る
+				</a>
 			</div>
 		</div>
-	{/if}
+
+		<!-- 利用規約・プライバシーポリシー -->
+		<p class="text-xs text-gray-500 text-center mt-6">
+			{course.is_free ? '受講開始' : '購入'}することで、
+			<a href="#" class="text-blue-600 hover:text-blue-800">利用規約</a>
+			および
+			<a href="#" class="text-blue-600 hover:text-blue-800">プライバシーポリシー</a>
+			に同意したものとみなされます。
+		</p>
+	</div>
 </div>

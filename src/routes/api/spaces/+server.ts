@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { ProfileManager, SpaceManager, CourseManager, getD1, generateUUID } from '$lib/server/d1-db';
+import { InstructorManager, SpaceManager, CourseManager, getD1, generateUUID } from '$lib/server/d1-db';
 
 export const GET: RequestHandler = async ({ url, platform }) => {
 	try {
@@ -14,10 +14,10 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 		const db = await getD1(platform);
 
 		// ユーザー名からユーザーIDを取得
-		const user = await ProfileManager.getUserByUsername(db, username);
+		const user = await InstructorManager.getInstructorByUsername(db, username);
 
 		if (!user) {
-			return json({ error: 'User not found' }, { status: 404 });
+			return json({ error: 'Instructor not found' }, { status: 404 });
 		}
 
 		// スラッグが指定されている場合は単一スペースを取得

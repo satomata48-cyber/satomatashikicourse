@@ -1,6 +1,6 @@
 import { json } from '@sveltejs/kit';
 import type { RequestHandler } from './$types';
-import { ProfileManager, SpaceManager, CourseManager, getD1 } from '$lib/server/d1-db';
+import { InstructorManager, SpaceManager, CourseManager, getD1 } from '$lib/server/d1-db';
 
 export const GET: RequestHandler = async ({ url, platform }) => {
 	try {
@@ -33,7 +33,7 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 				space = await SpaceManager.getSpaceById(db, spaceId);
 			} else if (spaceSlug && username) {
 				// ユーザー名からユーザーIDを取得
-				const user = await ProfileManager.getUserByUsername(db, username);
+				const user = await InstructorManager.getInstructorByUsername(db, username);
 				if (!user) {
 					return json({ error: 'User not found' }, { status: 404 });
 				}
@@ -57,10 +57,10 @@ export const GET: RequestHandler = async ({ url, platform }) => {
 		}
 
 		// ユーザー名からユーザーIDを取得
-		const user = await ProfileManager.getUserByUsername(db, username);
+		const user = await InstructorManager.getInstructorByUsername(db, username);
 
 		if (!user) {
-			return json({ error: 'User not found' }, { status: 404 });
+			return json({ error: 'Instructor not found' }, { status: 404 });
 		}
 
 		// スペースIDが指定されている場合は、そのスペースのコースのみ取得
@@ -117,8 +117,26 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 			return json({ error: 'Space not found' }, { status: 404 });
 		}
 
+		// デバッグログ
+		console.log('=== Course Creation Debug ===');
+		console.log('space.instructor_id:', space.instructor_id);
+		console.log('locals.user.id:', locals.user.id);
+		console.log('locals.user:', JSON.stringify(locals.user, null, 2));
+		console.log('space:', JSON.stringify(space, null, 2));
+		console.log('Match:', space.instructor_id === locals.user.id);
+
 		if (space.instructor_id !== locals.user.id) {
-			return json({ error: 'Forbidden' }, { status: 403 });
+			return json({
+				error: 'Forbidden',
+				debug: {
+					space_instructor_id: space.instructor_id,
+					user_id: locals.user.id,
+					space_instructor_id_type: typeof space.instructor_id,
+					user_id_type: typeof locals.user.id,
+					match: space.instructor_id === locals.user.id,
+					user_keys: Object.keys(locals.user)
+				}
+			}, { status: 403 });
 		}
 
 		// コース作成
@@ -165,8 +183,29 @@ export const PUT: RequestHandler = async ({ request, locals, platform }) => {
 
 		const space = await SpaceManager.getSpaceById(db, course.space_id as string);
 
+		// デバッグログ（PUT用）
+		console.log('=== Course Update Debug ===');
+		console.log('space.instructor_id:', space?.instructor_id);
+		console.log('locals.user.id:', locals.user.id);
+		console.log('locals.user:', JSON.stringify(locals.user, null, 2));
+		console.log('space:', JSON.stringify(space, null, 2));
+		console.log('Match:', space?.instructor_id === locals.user.id);
+		console.log('Type of space.instructor_id:', typeof space?.instructor_id);
+		console.log('Type of locals.user.id:', typeof locals.user.id);
+
 		if (!space || space.instructor_id !== locals.user.id) {
-			return json({ error: 'Forbidden' }, { status: 403 });
+			return json({
+				error: 'Forbidden',
+				debug: {
+					space_instructor_id: space?.instructor_id,
+					user_id: locals.user.id,
+					space_instructor_id_type: typeof space?.instructor_id,
+					user_id_type: typeof locals.user.id,
+					match: space?.instructor_id === locals.user.id,
+					user_keys: Object.keys(locals.user),
+					space_exists: !!space
+				}
+			}, { status: 403 });
 		}
 
 		// コース更新

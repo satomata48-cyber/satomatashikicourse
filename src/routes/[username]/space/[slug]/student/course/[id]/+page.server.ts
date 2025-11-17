@@ -16,14 +16,10 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 		};
 	}
 
-	// 購入状態をチェック
+	// 購入状態をチェック（無料・有料問わず購入が必須）
 	let hasPurchased = false;
 
-	if (course.is_free) {
-		// 無料コースは購入不要
-		hasPurchased = true;
-	} else if (locals.user) {
-		// 有料コースの場合、購入状態を確認
+	if (locals.user) {
 		hasPurchased = await CourseManager.hasStudentPurchasedCourse(
 			db,
 			courseId,

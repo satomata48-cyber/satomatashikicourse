@@ -2,8 +2,6 @@
 	import { onMount } from 'svelte'
 	import { goto } from '$app/navigation'
 	import { page } from '$app/stores'
-	import { dndzone } from 'svelte-dnd-action'
-	import { flip } from 'svelte/animate'
 
 	export let data
 
@@ -15,25 +13,71 @@
 	let lessons: any[] = []
 	let loading = true
 	let error = ''
-	let showCreateForm = true // デフォルトで表示
-	let dragDisabled = true
-	
-	// 新規レッスンフォーム（現在のスキーマに対応）
-	let newLesson = {
-		title: '',
-		description: '',
-		content: '', // テキストコンテンツ
-		videoType: 'youtube',
-		videoUrl: '',
-		duration: 0,
-		isPublished: false
+
+	// セクションの型定義
+	interface Section {
+		id: string
+		type: string
+		content?: string
+		videoType?: string
+		videoUrl?: string
+		linkUrl?: string
+		linkTitle?: string
 	}
-	let createLoading = false
-	let createError = ''
 
 	// 編集中のレッスン
 	let editingLesson: any = null
 	let editMode = false
+
+	// レッスンフォーム
+	let lessonTitle = ''
+	let lessonDescription = ''
+	let sections: Section[] = []
+	let isPublished = false
+	let duration = 0
+
+	// フォーム状態
+	let saveLoading = false
+	let saveError = ''
+
+	// セクション開閉状態
+	let expandedSections: Set<string> = new Set()
+
+	// ドラッグ&ドロップ
+	let draggedIndex: number | null = null
+
+	// セクションテンプレート
+	const templates = [
+		{
+			name: 'テキストコンテンツ',
+			icon: '📝',
+			description: 'テキストや説明を追加',
+			template: {
+				type: 'text',
+				content: ''
+			}
+		},
+		{
+			name: '動画',
+			icon: '🎥',
+			description: 'YouTube動画を追加',
+			template: {
+				type: 'video',
+				videoType: 'youtube',
+				videoUrl: ''
+			}
+		},
+		{
+			name: '添付ファイル',
+			icon: '📎',
+			description: '外部リンクを添付',
+			template: {
+				type: 'attachment',
+				linkUrl: '',
+				linkTitle: ''
+			}
+		}
+	]
 
 	onMount(async () => {
 		await loadData()
@@ -70,19 +114,79 @@
 			loading = false
 		}
 	}
-	
+
+	// 既存データをセクション形式に変換
+	function convertLegacyToSections(lesson: any): Section[] {
+		const convertedSections: Section[] = []
+
+		// content_before
+		if (lesson.content_before) {
+			convertedSections.push({
+				id: crypto.randomUUID(),
+				type: 'text',
+				content: lesson.content_before
+			})
+		}
+
+		// video
+		if (lesson.video_url) {
+			convertedSections.push({
+				id: crypto.randomUUID(),
+				type: 'video',
+				videoType: lesson.video_type || 'youtube',
+				videoUrl: lesson.video_url
+			})
+		}
+
+		// content_after
+		if (lesson.content_after) {
+			convertedSections.push({
+				id: crypto.randomUUID(),
+				type: 'text',
+				content: lesson.content_after
+			})
+		}
+
+		// attachments
+		if (lesson.attachments) {
+			try {
+				const attachments = JSON.parse(lesson.attachments)
+				attachments.forEach((att: any) => {
+					convertedSections.push({
+						id: crypto.randomUUID(),
+						type: 'attachment',
+						linkUrl: att.url,
+						linkTitle: att.name
+					})
+				})
+			} catch (e) {
+				console.warn('Failed to parse attachments:', e)
+			}
+		}
+
+		return convertedSections
+	}
+
 	// レッスンを編集モードにする
 	function editLesson(lesson: any) {
 		editMode = true
 		editingLesson = lesson
-		newLesson = {
-			title: lesson.title,
-			description: lesson.description || '',
-			content: lesson.content || '',
-			videoType: lesson.video_type || 'youtube',
-			videoUrl: lesson.video_url || '',
-			duration: Math.round(lesson.duration / 60), // 秒から分に変換
-			isPublished: lesson.is_published
+
+		lessonTitle = lesson.title
+		lessonDescription = lesson.description || ''
+		isPublished = lesson.is_published
+		duration = Math.round(lesson.duration / 60)
+
+		// sectionsがあればそれを使用、なければレガシーデータから変換
+		if (lesson.sections) {
+			try {
+				sections = JSON.parse(lesson.sections)
+			} catch (e) {
+				console.warn('Failed to parse sections:', e)
+				sections = convertLegacyToSections(lesson)
+			}
+		} else {
+			sections = convertLegacyToSections(lesson)
 		}
 	}
 
@@ -90,35 +194,35 @@
 	function cancelEdit() {
 		editMode = false
 		editingLesson = null
-		newLesson = {
-			title: '',
-			description: '',
-			content: '',
-			videoType: 'youtube',
-			videoUrl: '',
-			duration: 0,
-			isPublished: false
-		}
+		lessonTitle = ''
+		lessonDescription = ''
+		sections = []
+		isPublished = false
+		duration = 0
+		saveError = ''
 	}
 
-	async function createLesson() {
-		createLoading = true
-		createError = ''
+	// レッスンを保存
+	async function saveLesson() {
+		saveLoading = true
+		saveError = ''
 
 		try {
-			const lessonData = {
-				course_id: courseId,
-				title: newLesson.title,
-				description: newLesson.description,
-				content: newLesson.content,
-				video_url: newLesson.videoUrl,
-				video_type: newLesson.videoUrl ? newLesson.videoType : null,
-				duration: newLesson.duration * 60, // 分を秒に変換
-				order_index: lessons.length, // 末尾に追加
-				is_published: newLesson.isPublished
+			if (!lessonTitle.trim()) {
+				throw new Error('レッスンタイトルを入力してください')
 			}
 
-			const url = editMode ? '/api/lessons' : '/api/lessons'
+			const lessonData = {
+				course_id: courseId,
+				title: lessonTitle,
+				description: lessonDescription,
+				sections: JSON.stringify(sections),
+				duration: duration * 60,
+				order_index: editMode ? editingLesson.order_index : lessons.length,
+				is_published: isPublished
+			}
+
+			const url = '/api/lessons'
 			const method = editMode ? 'PUT' : 'POST'
 
 			const requestData = editMode
@@ -144,10 +248,10 @@
 			await loadData()
 
 		} catch (err: any) {
-			createError = err.message || 'レッスン作成に失敗しました'
-			console.error('Lesson creation error:', err)
+			saveError = err.message || 'レッスン保存に失敗しました'
+			console.error('Lesson save error:', err)
 		} finally {
-			createLoading = false
+			saveLoading = false
 		}
 	}
 
@@ -167,7 +271,6 @@
 				throw new Error(result.error || '削除に失敗しました')
 			}
 
-			// レッスンリストを再読み込み
 			await loadData()
 
 		} catch (err: any) {
@@ -192,7 +295,6 @@
 				throw new Error(result.error || '公開状態の変更に失敗しました')
 			}
 
-			// レッスンリストを再読み込み
 			await loadData()
 
 		} catch (err: any) {
@@ -200,50 +302,74 @@
 		}
 	}
 
-	// ドラッグ&ドロップでの並び替え
-	function handleDndConsider(e: any) {
-		lessons = e.detail.items
-		dragDisabled = false
+	// セクション管理
+	function addSection(template: any) {
+		const newSection: Section = {
+			id: crypto.randomUUID(),
+			...template
+		}
+		sections = [...sections, newSection]
+		expandedSections.add(newSection.id)
+		expandedSections = new Set(expandedSections)
 	}
 
-	async function handleDndFinalize(e: any) {
-		lessons = e.detail.items
-		dragDisabled = true
+	function deleteSection(index: number) {
+		sections = sections.filter((_, i) => i !== index)
+	}
 
-		// 並び順を更新（各レッスンのorder_indexを更新）
-		try {
-			for (let i = 0; i < lessons.length; i++) {
-				const lesson = lessons[i]
-				if (lesson.order_index !== i) {
-					await fetch('/api/lessons', {
-						method: 'PUT',
-						headers: { 'Content-Type': 'application/json' },
-						body: JSON.stringify({
-							id: lesson.id,
-							order_index: i
-						})
-					})
-				}
-			}
+	function toggleSection(sectionId: string) {
+		if (expandedSections.has(sectionId)) {
+			expandedSections.delete(sectionId)
+		} else {
+			expandedSections.add(sectionId)
+		}
+		expandedSections = new Set(expandedSections)
+	}
 
-			// レッスンリストを再読み込み
-			await loadData()
-
-		} catch (err: any) {
-			console.error('Failed to update lesson order:', err)
-			alert(`並び順の保存に失敗しました: ${err.message}`)
+	// ドラッグ&ドロップ
+	function handleDragStart(event: DragEvent, index: number) {
+		draggedIndex = index
+		if (event.dataTransfer) {
+			event.dataTransfer.effectAllowed = 'move'
 		}
 	}
-	
-	function formatDuration(seconds: number): string {
-		const minutes = Math.floor(seconds / 60)
-		const remainingSeconds = seconds % 60
-		return `${minutes}:${remainingSeconds.toString().padStart(2, '0')}`
+
+	function handleDragOver(event: DragEvent) {
+		event.preventDefault()
+		if (event.dataTransfer) {
+			event.dataTransfer.dropEffect = 'move'
+		}
 	}
-	
+
+	function handleDrop(event: DragEvent, targetIndex: number) {
+		event.preventDefault()
+		if (draggedIndex !== null && draggedIndex !== targetIndex) {
+			const newSections = [...sections]
+			const [draggedItem] = newSections.splice(draggedIndex, 1)
+			newSections.splice(targetIndex, 0, draggedItem)
+			sections = newSections
+		}
+		draggedIndex = null
+	}
+
+	function handleDragEnd() {
+		draggedIndex = null
+	}
+
+	function getSectionIcon(type: string): string {
+		const template = templates.find(t => t.template.type === type)
+		return template?.icon || '📄'
+	}
+
 	function getYouTubeId(url: string): string {
 		const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)
 		return match ? match[1] : ''
+	}
+
+	function previewCourse() {
+		if (space && course) {
+			window.open(`/${username}/space/${space.slug}/course/${course.slug || course.id}`, '_blank')
+		}
 	}
 </script>
 
@@ -258,76 +384,59 @@
 		</div>
 	{:else if course}
 		<!-- Header -->
-		<div class="mb-6 flex items-center justify-between">
-			<div>
-				<h2 class="text-2xl font-bold text-gray-900 mb-2">レッスン管理</h2>
-				<p class="text-gray-600">コース: {course.title}</p>
-			</div>
-			<div class="flex items-center space-x-3">
-				<button
-					on:click={() => {
-						if (space && course) {
-							window.open(`/${username}/space/${space.slug}/course/${course.slug || course.id}`, '_blank')
-						}
-					}}
-					class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-sm font-medium"
-				>
-					プレビュー
-				</button>
-				<button
-					on:click={createLesson}
-					disabled={createLoading || !newLesson.title}
-					class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm font-medium"
-				>
-					{createLoading ? '保存中...' : '保存'}
-				</button>
-			</div>
-		</div>
-		
-		<!-- 新規レッスン作成フォーム（2カラムレイアウト） -->
-		<div class="bg-white rounded-lg shadow mb-8 overflow-hidden">
-			<div class="bg-gray-50 border-b border-gray-200 px-6 py-4 flex items-center justify-between">
-				<div>
-					<h3 class="text-lg font-semibold text-gray-900">
-						{#if editMode}
-							レッスン編集
-						{:else}
-							新規レッスン作成
-						{/if}
-					</h3>
-					{#if editMode}
-						<p class="text-xs text-gray-600 mt-1">レッスン「{editingLesson?.title}」を編集中</p>
-					{/if}
+		<div class="bg-white border-b border-gray-200 sticky top-0 z-10">
+			<div class="px-6 py-4">
+				<div class="flex items-center justify-between">
+					<div>
+						<h1 class="text-xl font-bold text-gray-900">レッスン管理</h1>
+						<p class="text-sm text-gray-600 mt-1">
+							コース: {course.title}
+						</p>
+					</div>
+					<div class="flex items-center space-x-3">
+						<button
+							on:click={previewCourse}
+							class="px-4 py-2 text-gray-700 bg-gray-100 hover:bg-gray-200 rounded-lg transition-colors text-sm font-medium"
+						>
+							プレビュー
+						</button>
+						<button
+							on:click={saveLesson}
+							disabled={saveLoading || !lessonTitle}
+							class="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50 transition-colors text-sm font-medium"
+						>
+							{saveLoading ? '保存中...' : '保存'}
+						</button>
+					</div>
 				</div>
-				{#if editMode}
-					<button
-						type="button"
-						on:click={cancelEdit}
-						class="text-sm text-gray-600 hover:text-gray-800 px-3 py-1 border border-gray-300 rounded"
-					>
-						キャンセル
-					</button>
+
+				{#if saveError}
+					<div class="mt-3 bg-red-50 border border-red-200 text-red-600 px-4 py-2 rounded text-sm">
+						{saveError}
+					</div>
 				{/if}
 			</div>
+		</div>
 
-			<div class="grid grid-cols-2 divide-x divide-gray-200">
-				<!-- 左側: 編集フォーム -->
+		<div class="flex h-[calc(100vh-120px)]">
+			<!-- 左側: 編集エリア -->
+			<div class="w-1/2 bg-white border-r border-gray-200 overflow-y-auto">
 				<div class="p-6">
-					{#if createError}
-						<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg mb-4">
-							{createError}
-						</div>
-					{/if}
+					<!-- 基本情報 -->
+					<div class="mb-6">
+						<h2 class="text-lg font-semibold text-gray-900 mb-4">
+							{editMode ? 'レッスン編集' : '新規レッスン作成'}
+						</h2>
 
-					<form on:submit|preventDefault={createLesson} class="space-y-4">
-						<div>
-							<label for="title" class="block text-sm font-medium text-gray-700 mb-1">
-								レッスンタイトル *
-							</label>
+						<div class="space-y-4">
+							<div>
+								<label for="title" class="block text-sm font-medium text-gray-700 mb-1">
+									レッスンタイトル *
+								</label>
 								<input
 									id="title"
 									type="text"
-									bind:value={newLesson.title}
+									bind:value={lessonTitle}
 									required
 									class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 									placeholder="レッスン1: 基礎概念"
@@ -340,59 +449,11 @@
 								</label>
 								<textarea
 									id="description"
-									bind:value={newLesson.description}
+									bind:value={lessonDescription}
 									rows="2"
 									class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none"
 									placeholder="このレッスンで学ぶ内容..."
 								></textarea>
-							</div>
-
-							<div>
-								<label for="content" class="block text-sm font-medium text-gray-700 mb-1">
-									テキストコンテンツ
-								</label>
-								<textarea
-									id="content"
-									bind:value={newLesson.content}
-									rows="6"
-									class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent resize-none font-mono text-sm"
-									placeholder="レッスンの本文をここに入力...&#10;&#10;動画がない場合はこのテキストがメインコンテンツになります。"
-								></textarea>
-								<p class="mt-1 text-xs text-gray-500">動画URLが空の場合は必須です</p>
-							</div>
-
-							<div class="border-t border-gray-200 pt-4">
-								<h5 class="text-sm font-medium text-gray-700 mb-3">動画（オプション）</h5>
-
-								<div>
-									<label for="videoType" class="block text-sm font-medium text-gray-700 mb-1">
-										動画タイプ
-									</label>
-									<select
-										id="videoType"
-										bind:value={newLesson.videoType}
-										class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-									>
-										<option value="youtube">YouTube</option>
-										<option value="external">外部ストレージ</option>
-									</select>
-								</div>
-
-								<div class="mt-3">
-									<label for="videoUrl" class="block text-sm font-medium text-gray-700 mb-1">
-										動画URL
-									</label>
-									<input
-										id="videoUrl"
-										type="url"
-										bind:value={newLesson.videoUrl}
-										class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-										placeholder={newLesson.videoType === 'youtube'
-											? 'https://www.youtube.com/watch?v=...'
-											: 'https://video-storage-url...'}
-									/>
-									<p class="mt-1 text-xs text-gray-500">動画を追加する場合はURLを入力</p>
-								</div>
 							</div>
 
 							<div>
@@ -402,226 +463,335 @@
 								<input
 									id="duration"
 									type="number"
-									bind:value={newLesson.duration}
+									bind:value={duration}
 									min="0"
 									class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
 									placeholder="10"
 								/>
-								<p class="mt-1 text-xs text-gray-500">動画の長さまたはテキストを読む時間の目安（分単位）</p>
 							</div>
 
 							<div>
 								<label class="flex items-center">
 									<input
 										type="checkbox"
-										bind:checked={newLesson.isPublished}
+										bind:checked={isPublished}
 										class="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded"
 									/>
 									<span class="ml-2 text-sm text-gray-700">すぐに公開する</span>
 								</label>
 							</div>
-
-							<div class="flex space-x-3 pt-4 border-t border-gray-200">
-								{#if editMode}
-									<button
-										type="button"
-										on:click={cancelEdit}
-										class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
-									>
-										編集をキャンセル
-									</button>
-								{/if}
-								<button
-									type="submit"
-									disabled={createLoading}
-									class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
-								>
-									{#if createLoading}
-										保存中...
-									{:else}
-										保存
-									{/if}
-								</button>
-							</div>
-						</form>
+						</div>
 					</div>
 
-					<!-- 右側: プレビュー -->
-					<div class="p-6 bg-gray-50">
-						<h4 class="text-sm font-semibold text-gray-700 mb-4">プレビュー</h4>
-
-						<div class="bg-white rounded-lg shadow-sm border border-gray-200 overflow-hidden">
-							<!-- レッスンカード -->
-							<div class="p-4">
-								<div class="flex items-start space-x-3">
-									<div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
-										<svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
-										</svg>
-									</div>
-									<div class="flex-1 min-w-0">
-										<h5 class="text-base font-semibold text-gray-900 mb-1">
-											{newLesson.title || 'レッスンタイトル'}
-										</h5>
-										{#if newLesson.description}
-											<p class="text-sm text-gray-600 mb-2">{newLesson.description}</p>
-										{:else}
-											<p class="text-sm text-gray-400 italic mb-2">説明文がここに表示されます</p>
-										{/if}
-										<div class="flex items-center space-x-3 text-xs text-gray-500">
-											<span class="flex items-center">
-												<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+					<!-- セクション一覧 -->
+					<div class="mb-6">
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">コンテンツセクション</h3>
+						{#if sections.length === 0}
+							<div class="border-2 border-dashed border-gray-300 rounded-lg p-4 text-center">
+								<p class="text-xs text-gray-500">
+									下のテンプレートから<br>セクションを追加してください
+								</p>
+							</div>
+						{:else}
+							<div class="space-y-2">
+								{#each sections as section, index}
+									<div
+										class="border border-gray-200 rounded-lg hover:border-blue-300 transition-colors"
+										class:opacity-50={draggedIndex === index}
+										class:border-blue-500={draggedIndex !== null && draggedIndex !== index}
+										draggable="true"
+										on:dragstart={(e) => handleDragStart(e, index)}
+										on:dragover={handleDragOver}
+										on:drop={(e) => handleDrop(e, index)}
+										on:dragend={handleDragEnd}
+									>
+										<!-- ヘッダー -->
+										<div class="p-3 flex items-center justify-between">
+											<button
+												type="button"
+												on:click={() => toggleSection(section.id)}
+												class="flex items-center space-x-2 flex-1 text-left hover:bg-gray-50 transition-colors -m-3 p-3 rounded-l-lg"
+											>
+												<span class="text-base">{getSectionIcon(section.type)}</span>
+												<span class="text-xs font-medium text-gray-900">
+													{section.type === 'text' ? 'テキストコンテンツ' : section.type === 'video' ? '動画' : '添付ファイル'}
+												</span>
+												<svg class="w-4 h-4 text-gray-400 transition-transform ml-auto" class:rotate-180={expandedSections.has(section.id)} fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7"/>
 												</svg>
-												{newLesson.duration ? `${newLesson.duration}分` : '0分'}
-											</span>
-											{#if newLesson.isPublished}
-												<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700">
-													<svg class="w-3 h-3 mr-1" fill="currentColor" viewBox="0 0 20 20">
-														<path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd"/>
+											</button>
+											<div class="flex items-center space-x-1">
+												<div class="p-1 text-gray-400 cursor-move" title="ドラッグして移動">
+													<svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8h16M4 16h16"/>
 													</svg>
-													公開
-												</span>
-											{:else}
-												<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
-													非公開
-												</span>
-											{/if}
+												</div>
+												<button
+													type="button"
+													on:click|stopPropagation={() => deleteSection(index)}
+													class="p-1 text-red-400 hover:text-red-600"
+													title="削除"
+												>
+													<svg class="w-3 h-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"/>
+													</svg>
+												</button>
+											</div>
 										</div>
+
+										<!-- 詳細編集 -->
+										{#if expandedSections.has(section.id)}
+											<div class="p-3 pt-0 border-t border-gray-100">
+												{#if section.type === 'text'}
+													<textarea
+														bind:value={section.content}
+														rows="4"
+														class="w-full text-sm border border-gray-300 rounded px-3 py-2"
+														placeholder="テキストコンテンツを入力..."
+													></textarea>
+												{:else if section.type === 'video'}
+													<div class="space-y-2">
+														<select
+															bind:value={section.videoType}
+															class="w-full text-sm border border-gray-300 rounded px-3 py-2"
+														>
+															<option value="youtube">YouTube</option>
+															<option value="external">外部ストレージ</option>
+														</select>
+														<input
+															type="url"
+															bind:value={section.videoUrl}
+															class="w-full text-sm border border-gray-300 rounded px-3 py-2"
+															placeholder={section.videoType === 'youtube' ? 'https://www.youtube.com/watch?v=...' : 'https://video-storage-url...'}
+														/>
+													</div>
+												{:else if section.type === 'attachment'}
+													<div class="space-y-2">
+														<input
+															type="text"
+															bind:value={section.linkTitle}
+															class="w-full text-sm border border-gray-300 rounded px-3 py-2"
+															placeholder="リンクのタイトル"
+														/>
+														<input
+															type="url"
+															bind:value={section.linkUrl}
+															class="w-full text-sm border border-gray-300 rounded px-3 py-2"
+															placeholder="https://..."
+														/>
+													</div>
+												{/if}
+											</div>
+										{/if}
+									</div>
+								{/each}
+							</div>
+						{/if}
+					</div>
+
+					<!-- テンプレートパレット -->
+					<div class="border-t pt-4">
+						<h3 class="text-sm font-semibold text-gray-900 mb-3">セクションを追加</h3>
+						<div class="grid grid-cols-3 gap-2">
+							{#each templates as template}
+								<button
+									on:click={() => addSection(template.template)}
+									class="p-3 border border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-colors group text-center"
+								>
+									<span class="text-2xl block mb-1">{template.icon}</span>
+									<div class="font-medium text-gray-900 text-xs group-hover:text-blue-600">
+										{template.name}
+									</div>
+								</button>
+							{/each}
+						</div>
+					</div>
+
+					<!-- アクションボタン -->
+					<div class="flex space-x-3 pt-6 border-t mt-6">
+						{#if editMode}
+							<button
+								type="button"
+								on:click={cancelEdit}
+								class="flex-1 px-4 py-2 border border-gray-300 rounded-lg text-gray-700 hover:bg-gray-50 transition-colors"
+							>
+								キャンセル
+							</button>
+						{/if}
+						<button
+							type="button"
+							on:click={saveLesson}
+							disabled={saveLoading || !lessonTitle}
+							class="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg font-medium hover:bg-blue-700 transition-colors disabled:opacity-50"
+						>
+							{saveLoading ? '保存中...' : editMode ? '更新' : '作成'}
+						</button>
+					</div>
+				</div>
+			</div>
+
+			<!-- 右側: プレビュー -->
+			<div class="w-1/2 bg-gray-50 overflow-y-auto">
+				<div class="p-6">
+					<div class="bg-white rounded-lg shadow-lg overflow-hidden max-w-3xl mx-auto">
+						<!-- プレビューヘッダー -->
+						<div class="bg-gray-50 border-b border-gray-200 px-4 py-3">
+							<h2 class="text-sm font-semibold text-gray-900">プレビュー</h2>
+						</div>
+
+						<!-- レッスンカード -->
+						<div class="p-6">
+							<div class="flex items-start space-x-3 mb-6">
+								<div class="flex-shrink-0 w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
+									<svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+									</svg>
+								</div>
+								<div class="flex-1 min-w-0">
+									<h3 class="text-lg font-semibold text-gray-900 mb-1">
+										{lessonTitle || 'レッスンタイトル'}
+									</h3>
+									{#if lessonDescription}
+										<p class="text-sm text-gray-600 mb-2">{lessonDescription}</p>
+									{/if}
+									<div class="flex items-center space-x-3 text-xs text-gray-500">
+										<span class="flex items-center">
+											<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/>
+											</svg>
+											{duration ? `${duration}分` : '0分'}
+										</span>
+										{#if isPublished}
+											<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-green-100 text-green-700">
+												公開
+											</span>
+										{:else}
+											<span class="inline-flex items-center px-2 py-0.5 rounded-full bg-gray-100 text-gray-600">
+												非公開
+											</span>
+										{/if}
 									</div>
 								</div>
 							</div>
 
-							<!-- テキストコンテンツプレビュー -->
-							{#if newLesson.content}
-								<div class="border-t border-gray-200 p-4 bg-white">
-									<h6 class="text-xs font-semibold text-gray-700 mb-2 uppercase tracking-wide">コンテンツ</h6>
-									<div class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
-										{newLesson.content}
-									</div>
+							<!-- セクションプレビュー -->
+							{#if sections.length > 0}
+								<div class="space-y-4">
+									{#each sections as section}
+										{#if section.type === 'text'}
+											<div class="bg-white p-4 border border-gray-200 rounded-lg">
+												<div class="text-sm text-gray-700 whitespace-pre-wrap leading-relaxed">
+													{section.content || 'テキストコンテンツがここに表示されます'}
+												</div>
+											</div>
+										{:else if section.type === 'video' && section.videoUrl}
+											{@const youtubeId = getYouTubeId(section.videoUrl)}
+											{#if section.videoType === 'youtube' && youtubeId}
+												<div class="border border-gray-200 rounded-lg overflow-hidden">
+													<div class="aspect-video bg-black">
+														<iframe
+															src="https://www.youtube.com/embed/{youtubeId}"
+															title="動画"
+															frameborder="0"
+															allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+															allowfullscreen
+															class="w-full h-full"
+														></iframe>
+													</div>
+												</div>
+											{:else}
+												<div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
+													<p class="text-xs text-gray-600">動画URL: {section.videoUrl}</p>
+												</div>
+											{/if}
+										{:else if section.type === 'attachment'}
+											<a
+												href={section.linkUrl || '#'}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="flex items-center justify-between p-4 bg-gray-50 rounded-lg border border-gray-200 hover:bg-blue-50 hover:border-blue-300 transition-all group"
+											>
+												<div class="flex items-center space-x-3 flex-1 min-w-0">
+													<div class="flex-shrink-0 w-10 h-10 bg-blue-100 rounded flex items-center justify-center group-hover:bg-blue-200 transition-colors">
+														<svg class="h-5 w-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+														</svg>
+													</div>
+													<div class="flex-1 min-w-0">
+														<p class="text-sm font-medium text-gray-900 truncate group-hover:text-blue-700">
+															{section.linkTitle || 'リンクタイトル'}
+														</p>
+														{#if section.linkUrl}
+															<p class="text-xs text-gray-500 truncate mt-0.5">{section.linkUrl}</p>
+														{/if}
+													</div>
+												</div>
+												<svg class="h-5 w-5 text-gray-400 group-hover:text-blue-600 flex-shrink-0 ml-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+												</svg>
+											</a>
+										{/if}
+									{/each}
 								</div>
-							{/if}
-
-							<!-- 動画プレビュー -->
-							{#if newLesson.videoUrl && newLesson.videoType === 'youtube'}
-								{@const youtubeId = getYouTubeId(newLesson.videoUrl)}
-								{#if youtubeId}
-									<div class="border-t border-gray-200">
-										<div class="aspect-video bg-black">
-											<iframe
-												src="https://www.youtube.com/embed/{youtubeId}"
-												title={newLesson.title}
-												frameborder="0"
-												allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
-												allowfullscreen
-												class="w-full h-full"
-											></iframe>
-										</div>
-									</div>
-								{:else}
-									<div class="border-t border-gray-200 p-4 bg-yellow-50">
-										<p class="text-xs text-yellow-700">有効なYouTube URLを入力してください</p>
-									</div>
-								{/if}
-							{:else if newLesson.videoUrl}
-								<div class="border-t border-gray-200 p-4 bg-gray-100">
-									<p class="text-xs text-gray-600">動画URL: {newLesson.videoUrl}</p>
-								</div>
-							{/if}
-
-							<!-- コンテンツまたは動画が空の場合の警告 -->
-							{#if !newLesson.content && !newLesson.videoUrl}
-								<div class="border-t border-gray-200 p-4 bg-amber-50">
-									<p class="text-xs text-amber-700">
-										<strong>注意:</strong> テキストコンテンツまたは動画URLのいずれかが必要です
+							{:else}
+								<div class="border-2 border-dashed border-gray-300 rounded-lg p-8 text-center">
+									<p class="text-sm text-gray-400">
+										セクションを追加すると<br>ここにプレビューが表示されます
 									</p>
 								</div>
 							{/if}
 						</div>
+					</div>
 
-						<div class="mt-4 p-3 bg-blue-50 border border-blue-200 rounded-lg">
-							<p class="text-xs text-blue-700">
-								<strong>ヒント:</strong> 左側のフォームで入力した内容がリアルタイムでプレビューに反映されます。
-							</p>
-						</div>
-
-						<!-- 作成済みレッスン一覧 -->
-						{#if lessons.length > 0}
-							<div class="mt-6 pt-6 border-t border-gray-200">
-								<h4 class="text-sm font-semibold text-gray-700 mb-4">作成済みレッスン ({lessons.length}件)</h4>
-								<p class="text-xs text-gray-500 mb-3">ドラッグ&ドロップで並び順を変更できます</p>
-
-								<div
-									use:dndzone={{ items: lessons, dragDisabled }}
-									on:consider={handleDndConsider}
-									on:finalize={handleDndFinalize}
-									class="space-y-2"
-								>
-									{#each lessons as lesson (lesson.id)}
-										<div
-											animate:flip={{ duration: 200 }}
-											class="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors {editingLesson?.id === lesson.id ? 'bg-blue-50 border-blue-300' : ''}"
-										>
-											<div class="flex items-start justify-between">
-												<div class="flex items-start space-x-2 flex-1 cursor-pointer" on:click={() => editLesson(lesson)}>
-													<div class="flex items-center text-gray-400 mt-0.5">
-														<svg class="h-3 w-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 8V4m0 0h4M4 4l5 5m11-1V4m0 0h-4m4 0l-5 5M4 16v4m0 0h4m-4 0l5-5m11 5l-5-5m5 5v-4m0 4h-4"/>
-														</svg>
+					<!-- 作成済みレッスン一覧 -->
+					{#if lessons.length > 0}
+						<div class="mt-6 pt-6">
+							<h4 class="text-sm font-semibold text-gray-700 mb-4">作成済みレッスン ({lessons.length}件)</h4>
+							<div class="space-y-2">
+								{#each lessons as lesson (lesson.id)}
+									<div
+										class="p-3 border border-gray-200 rounded-lg hover:bg-gray-50 transition-colors {editingLesson?.id === lesson.id ? 'bg-blue-50 border-blue-300' : ''}"
+									>
+										<div class="flex items-start justify-between">
+											<div class="flex items-start space-x-2 flex-1 cursor-pointer" on:click={() => editLesson(lesson)}>
+												<div class="flex-1 min-w-0">
+													<div class="flex items-center mb-1">
+														<span class="text-xs font-medium text-gray-500 mr-1.5">#{lesson.order_index + 1}</span>
+														<h3 class="text-sm font-medium text-gray-900 truncate">
+															{lesson.title}
+														</h3>
+														<span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium {lesson.is_published ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
+															{lesson.is_published ? '公開' : '非公開'}
+														</span>
 													</div>
-													<div class="flex-1 min-w-0">
-														<div class="flex items-center mb-1">
-															<span class="text-xs font-medium text-gray-500 mr-1.5">#{lesson.order_index + 1}</span>
-															<h3 class="text-sm font-medium text-gray-900 truncate">
-																{lesson.title}
-															</h3>
-															<span class="ml-2 inline-flex items-center px-1.5 py-0.5 rounded-full text-xs font-medium {lesson.is_published ? 'bg-green-100 text-green-700' : 'bg-gray-100 text-gray-600'}">
-																{lesson.is_published ? '公開' : '非公開'}
-															</span>
-														</div>
-														<div class="flex items-center space-x-2 text-xs text-gray-500">
-															{#if lesson.video_type}
-																<span class="flex items-center">
-																	<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
-																	</svg>
-																	動画
-																</span>
-															{:else if lesson.content}
-																<span class="flex items-center">
-																	<svg class="w-3 h-3 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-																		<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/>
-																	</svg>
-																	テキスト
-																</span>
-															{/if}
-															<span>{Math.round(lesson.duration / 60)}分</span>
-														</div>
+													<div class="flex items-center space-x-2 text-xs text-gray-500">
+														<span>{Math.round(lesson.duration / 60)}分</span>
 													</div>
-												</div>
-												<div class="flex space-x-1 ml-2">
-													<button
-														on:click={() => togglePublished(lesson)}
-														class="px-2 py-1 text-xs rounded transition-colors {lesson.is_published
-															? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
-															: 'bg-green-100 text-green-700 hover:bg-green-200'}"
-													>
-														{lesson.is_published ? '非公開' : '公開'}
-													</button>
-													<button
-														on:click={() => deleteLesson(lesson.id)}
-														class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
-													>
-														削除
-													</button>
 												</div>
 											</div>
+											<div class="flex space-x-1 ml-2">
+												<button
+													on:click={() => togglePublished(lesson)}
+													class="px-2 py-1 text-xs rounded transition-colors {lesson.is_published
+														? 'bg-yellow-100 text-yellow-700 hover:bg-yellow-200'
+														: 'bg-green-100 text-green-700 hover:bg-green-200'}"
+												>
+													{lesson.is_published ? '非公開' : '公開'}
+												</button>
+												<button
+													on:click={() => deleteLesson(lesson.id)}
+													class="px-2 py-1 text-xs bg-red-100 text-red-700 rounded hover:bg-red-200 transition-colors"
+												>
+													削除
+												</button>
+											</div>
 										</div>
-									{/each}
-								</div>
+									</div>
+								{/each}
 							</div>
-						{/if}
+						</div>
+					{/if}
 				</div>
 			</div>
 		</div>
