@@ -41,20 +41,28 @@
       const data = await response.json();
 
       if (!response.ok) {
-        throw new Error(data.error || 'ログインに失敗しました');
+        error = data.error || 'ログインに失敗しました。メールアドレスとパスワードを確認してください。';
+        return;
       }
 
       // ログイン成功
-      if (data.user) {
-        if (!data.user.username) {
+      if (data.success && data.user) {
+        // 講師の場合のみusernameをチェック
+        if (data.user.userType === 'instructor' && !data.user.username) {
           goto('/profile/setup');
           return;
         }
 
-        if (redirect) {
-          goto(redirect);
+        // 講師の場合はダッシュボードへ
+        if (data.user.userType === 'instructor') {
+          if (redirect) {
+            goto(redirect);
+          } else {
+            goto(`/${data.user.username}/dashboard`);
+          }
         } else {
-          goto(`/${data.user.username}/dashboard`);
+          // 生徒の場合はリダイレクト先があればそこへ、なければホームへ
+          goto(redirect || '/');
         }
       }
     } catch (err: any) {
