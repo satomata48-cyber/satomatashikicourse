@@ -32,10 +32,9 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 	const studentsWithPurchases = await db
 		.prepare(`
 			SELECT
-				p.id as student_id,
-				p.email,
-				p.username,
-				p.display_name,
+				s.id as student_id,
+				s.email,
+				s.display_name,
 				ss.enrolled_at,
 				ss.status as student_status,
 				cp.id as purchase_id,
@@ -46,8 +45,8 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 				cp.stripe_payment_intent_id,
 				cp.purchased_at
 			FROM space_students ss
-			INNER JOIN profiles p ON ss.student_id = p.id
-			LEFT JOIN course_purchases cp ON cp.student_id = p.id AND cp.course_id = ?
+			INNER JOIN students s ON ss.student_id = s.id
+			LEFT JOIN course_purchases cp ON cp.student_id = s.id AND cp.course_id = ?
 			WHERE ss.space_id = ?
 			ORDER BY cp.purchased_at DESC, ss.enrolled_at DESC
 		`)

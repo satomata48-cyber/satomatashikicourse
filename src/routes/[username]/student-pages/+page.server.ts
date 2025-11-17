@@ -20,10 +20,9 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 	const studentsWithDetails = await db
 		.prepare(`
 			SELECT
-				p.id as student_id,
-				p.email,
-				p.username,
-				p.display_name,
+				s.id as student_id,
+				s.email,
+				s.display_name,
 				ss.space_id,
 				sp.title as space_title,
 				sp.slug as space_slug,
@@ -32,11 +31,11 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 				COUNT(DISTINCT cp.id) as total_purchases,
 				SUM(CASE WHEN cp.status = 'completed' THEN cp.amount ELSE 0 END) as total_spent
 			FROM space_students ss
-			INNER JOIN profiles p ON ss.student_id = p.id
+			INNER JOIN students s ON ss.student_id = s.id
 			INNER JOIN spaces sp ON ss.space_id = sp.id
-			LEFT JOIN course_purchases cp ON cp.student_id = p.id
+			LEFT JOIN course_purchases cp ON cp.student_id = s.id
 			WHERE sp.instructor_id = ?
-			GROUP BY p.id, ss.space_id, sp.title, sp.slug, ss.enrolled_at, ss.status
+			GROUP BY s.id, ss.space_id, sp.title, sp.slug, ss.enrolled_at, ss.status
 			ORDER BY ss.enrolled_at DESC
 		`)
 		.bind(locals.user.id)
