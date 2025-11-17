@@ -114,6 +114,7 @@
 					</thead>
 					<tbody class="bg-white divide-y divide-gray-200">
 						{#each students as student}
+							{@const badge = getPurchaseStatusBadge(student.purchase_status)}
 							<tr class="hover:bg-gray-50 {student.purchase_id ? 'bg-green-50/30' : ''}">
 								<td class="px-6 py-4 whitespace-nowrap">
 									<div class="flex items-center">
@@ -128,7 +129,6 @@
 									</div>
 								</td>
 								<td class="px-6 py-4 whitespace-nowrap">
-									{@const badge = getPurchaseStatusBadge(student.purchase_status)}
 									<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {badge.class}">
 										{badge.text}
 									</span>
