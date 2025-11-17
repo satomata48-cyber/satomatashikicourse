@@ -245,6 +245,13 @@
 								>
 									料金編集
 								</a>
+								<a
+									href="/{username}/courses/{course.id}/purchasers"
+									class="text-sm bg-orange-100 text-orange-700 px-3 py-1 rounded hover:bg-orange-200 transition-colors"
+									title="コースを購入した生徒を管理"
+								>
+									購入者管理
+								</a>
 								<button
 									on:click={() => deleteCourse(course.id)}
 									class="text-sm bg-red-100 text-red-700 px-3 py-1 rounded hover:bg-red-200 transition-colors"

@@ -20,6 +20,9 @@
 	let lessonCompletions: any[] = []
 	let completingLesson = false
 
+	// サーバーから購入状態を取得
+	$: hasPurchased = data.hasPurchased ?? false
+
 	onMount(async () => {
 		await loadCourseData()
 	})
@@ -47,8 +50,21 @@
 			course = result.course
 			space = result.space
 
-			// TODO: レッスン一覧とユーザー情報の取得
-			lessons = []
+			// レッスン一覧を取得（公開済みのみ）
+			const lessonsResponse = await fetch(`/api/lessons?courseId=${course.id}`)
+			const lessonsResult = await lessonsResponse.json()
+
+			if (lessonsResponse.ok) {
+				// 公開済みのレッスンのみフィルタリング
+				lessons = (lessonsResult.lessons || []).filter((l: any) => l.is_published)
+				// order_indexでソート
+				lessons.sort((a: any, b: any) => a.order_index - b.order_index)
+			} else {
+				console.warn('Failed to load lessons:', lessonsResult.error)
+				lessons = []
+			}
+
+			// TODO: ユーザー情報の取得
 			student = null
 
 			// レッスン完了状態を取得
@@ -103,6 +119,12 @@
 		}
 
 		return url // YouTube以外のURLはそのまま返す
+	}
+
+	// YouTube ID を取得する
+	function getYouTubeId(url: string): string {
+		const match = url.match(/(?:youtube\.com\/watch\?v=|youtu\.be\/)([^&\n?#]+)/)
+		return match ? match[1] : ''
 	}
 
 	// レッスンが完了済みかチェック
@@ -172,10 +194,51 @@
 			</div>
 		</div>
 		
-		<!-- 2カラムレイアウト -->
-		<div class="flex h-screen">
-			<!-- 左カラム: レッスン一覧 -->
-			<div class="w-80 bg-white border-r border-gray-200 overflow-y-auto">
+		<!-- 購入が必要な場合の表示 -->
+		{#if !course.is_free && !hasPurchased}
+			<div class="max-w-4xl mx-auto mt-12 px-6">
+				<div class="bg-white rounded-lg shadow-lg p-8 text-center">
+					<div class="mb-6">
+						<svg class="mx-auto h-16 w-16 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+							<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/>
+						</svg>
+					</div>
+					<h2 class="text-3xl font-bold text-gray-900 mb-4">このコースは有料です</h2>
+					<p class="text-xl text-gray-600 mb-8">
+						このコースにアクセスするには購入が必要です
+					</p>
+
+					<div class="mb-8 p-6 bg-gray-50 rounded-lg">
+						<div class="text-4xl font-bold text-blue-600 mb-2">
+							{new Intl.NumberFormat('ja-JP', {
+								style: 'currency',
+								currency: course.currency || 'JPY'
+							}).format(course.price)}
+						</div>
+						<div class="text-sm text-gray-500">一度購入すると、無制限にアクセスできます</div>
+					</div>
+
+					<div class="flex flex-col items-center space-y-4">
+						<a
+							href="/{username}/space/{slug}/course/{course.id}/purchase"
+							class="w-full md:w-auto px-8 py-4 bg-blue-600 text-white text-lg font-semibold rounded-lg hover:bg-blue-700 transition-colors"
+						>
+							このコースを購入する
+						</a>
+						<a
+							href="/{username}/space/{slug}/student/courses"
+							class="text-blue-600 hover:text-blue-800"
+						>
+							コース一覧に戻る
+						</a>
+					</div>
+				</div>
+			</div>
+		{:else}
+			<!-- 2カラムレイアウト -->
+			<div class="flex h-screen">
+				<!-- 左カラム: レッスン一覧 -->
+				<div class="w-80 bg-white border-r border-gray-200 overflow-y-auto">
 				<div class="p-6 border-b border-gray-200">
 					<h2 class="text-lg font-semibold text-gray-900">レッスン一覧</h2>
 					<p class="text-sm text-gray-500 mt-1">{lessons.length}個のレッスン</p>
@@ -301,38 +364,203 @@
 					{:else if currentView === 'lesson' && selectedLesson}
 						<!-- レッスン内容表示 -->
 
-						<!-- 動画プレイヤーエリア -->
-						{#if selectedLesson.video_url}
-							<!-- YouTube埋め込み動画プレイヤー -->
-							{@const embedUrl = getYouTubeEmbedUrl(selectedLesson.video_url)}
-							{#if embedUrl.includes('youtube.com/embed')}
-								<div class="aspect-video bg-black rounded-lg mb-4 overflow-hidden">
-									<iframe
-										src={embedUrl}
-										title={selectedLesson.title}
-										class="w-full h-full"
-										frameborder="0"
-										allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-										allowfullscreen
-									></iframe>
-								</div>
-							{:else}
-								<!-- YouTube以外の動画URL -->
-								<div class="aspect-video bg-black rounded-lg mb-4 flex items-center justify-center">
-									<a
-										href={selectedLesson.video_url}
-										target="_blank"
-										rel="noopener noreferrer"
-										class="text-white hover:text-blue-300 underline"
-									>
-										動画を開く: {selectedLesson.video_url}
-									</a>
+						<!-- レッスンタイトルとナビゲーション -->
+						<div class="flex items-center justify-between mb-6">
+							<div class="flex-1">
+								<h2 class="text-2xl font-bold text-gray-900">{selectedLesson.title}</h2>
+								{#if selectedLesson.description}
+									<p class="text-gray-600 mt-2">{selectedLesson.description}</p>
+								{/if}
+							</div>
+							<button
+								on:click={showOverview}
+								class="flex items-center text-blue-600 hover:text-blue-800 text-sm ml-4"
+							>
+								<svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
+								</svg>
+								概要に戻る
+							</button>
+						</div>
+
+						<!-- セクションベースの表示 -->
+						{#if selectedLesson.sections}
+							{@const sections = JSON.parse(selectedLesson.sections)}
+							<div class="space-y-6">
+								{#each sections as section}
+									{#if section.type === 'text'}
+										<!-- テキストセクション -->
+										<div class="border-t border-gray-200 pt-6">
+											<div class="prose max-w-none">
+												<div class="text-gray-800 leading-relaxed whitespace-pre-wrap text-base">
+													{section.content || ''}
+												</div>
+											</div>
+										</div>
+									{:else if section.type === 'video'}
+										<!-- 動画セクション -->
+										{@const youtubeId = getYouTubeId(section.videoUrl || '')}
+										<div class="border-t border-gray-200 pt-6">
+											{#if section.videoType === 'youtube' && youtubeId}
+												<!-- YouTube埋め込み動画 -->
+												<div class="aspect-video bg-black rounded-lg overflow-hidden">
+													<iframe
+														src="https://www.youtube.com/embed/{youtubeId}"
+														title={selectedLesson.title}
+														class="w-full h-full"
+														frameborder="0"
+														allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+														allowfullscreen
+													></iframe>
+												</div>
+											{:else if section.videoUrl}
+												<!-- 外部動画URL -->
+												<div class="aspect-video bg-black rounded-lg flex items-center justify-center">
+													<a
+														href={section.videoUrl}
+														target="_blank"
+														rel="noopener noreferrer"
+														class="text-white hover:text-blue-300 underline"
+													>
+														動画を開く: {section.videoUrl}
+													</a>
+												</div>
+											{/if}
+										</div>
+									{:else if section.type === 'attachment'}
+										<!-- 添付ファイルセクション -->
+										<div class="border-t border-gray-200 pt-6">
+											<a
+												href={section.linkUrl || '#'}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="flex items-center p-4 bg-gray-50 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-all group"
+											>
+												<div class="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4 group-hover:bg-blue-200">
+													<svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+													</svg>
+												</div>
+												<div class="flex-1 min-w-0">
+													<p class="text-sm font-medium text-gray-900 truncate group-hover:text-blue-700">
+														{section.linkTitle || 'リンク'}
+													</p>
+													<p class="text-xs text-gray-500 mt-1 truncate">
+														{section.linkUrl || ''}
+													</p>
+												</div>
+												<svg class="h-5 w-5 text-gray-400 group-hover:text-blue-600 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+												</svg>
+											</a>
+										</div>
+									{/if}
+								{/each}
+							</div>
+						{:else}
+							<!-- 既存データとの互換性: レガシー形式の表示 -->
+							{@const contentBefore = selectedLesson.content_before || selectedLesson.content || ''}
+							{@const contentAfter = selectedLesson.content_after || ''}
+
+							<!-- レッスン詳細コンテンツ（動画の前） -->
+							{#if contentBefore}
+								<div class="border-t border-gray-200 pt-6 pb-6">
+									<div class="prose max-w-none">
+										<div class="text-gray-800 leading-relaxed whitespace-pre-line text-base">
+											{contentBefore}
+										</div>
+									</div>
 								</div>
 							{/if}
+
+							<!-- 動画プレイヤーエリア -->
+							{#if selectedLesson.video_url}
+								{@const embedUrl = getYouTubeEmbedUrl(selectedLesson.video_url)}
+								<div class="border-t border-gray-200 pt-6 pb-6">
+									<!-- YouTube埋め込み動画プレイヤー -->
+									{#if embedUrl.includes('youtube.com/embed')}
+										<div class="aspect-video bg-black rounded-lg overflow-hidden">
+											<iframe
+												src={embedUrl}
+												title={selectedLesson.title}
+												class="w-full h-full"
+												frameborder="0"
+												allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
+												allowfullscreen
+											></iframe>
+										</div>
+									{:else}
+										<!-- YouTube以外の動画URL -->
+										<div class="aspect-video bg-black rounded-lg flex items-center justify-center">
+											<a
+												href={selectedLesson.video_url}
+												target="_blank"
+												rel="noopener noreferrer"
+												class="text-white hover:text-blue-300 underline"
+											>
+												動画を開く: {selectedLesson.video_url}
+											</a>
+										</div>
+									{/if}
+								</div>
+							{/if}
+
+							<!-- レッスン詳細コンテンツ（動画の後） -->
+							{#if contentAfter}
+								<div class="border-t border-gray-200 pt-6 pb-6">
+									<div class="prose max-w-none">
+										<div class="text-gray-800 leading-relaxed whitespace-pre-line text-base">
+											{contentAfter}
+										</div>
+									</div>
+								</div>
+							{/if}
+
+							<!-- 添付リンク -->
+							{#if selectedLesson.attachments}
+								{@const attachments = JSON.parse(selectedLesson.attachments)}
+								{#if attachments.length > 0}
+									<div class="border-t border-gray-200 pt-6 pb-6">
+										<h3 class="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+											<svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+											</svg>
+											添付リンク ({attachments.length})
+										</h3>
+										<div class="grid grid-cols-1 md:grid-cols-2 gap-3">
+											{#each attachments as attachment (attachment.id)}
+												<a
+													href={attachment.url}
+													target="_blank"
+													rel="noopener noreferrer"
+													class="flex items-center p-4 bg-gray-50 border border-gray-200 rounded-lg hover:bg-blue-50 hover:border-blue-300 transition-all group"
+												>
+													<div class="flex-shrink-0 w-12 h-12 bg-blue-100 rounded-lg flex items-center justify-center mr-4 group-hover:bg-blue-200">
+														<svg class="h-6 w-6 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+															<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13.828 10.172a4 4 0 00-5.656 0l-4 4a4 4 0 105.656 5.656l1.102-1.101m-.758-4.899a4 4 0 005.656 0l4-4a4 4 0 00-5.656-5.656l-1.1 1.1"/>
+														</svg>
+													</div>
+													<div class="flex-1 min-w-0">
+														<p class="text-sm font-medium text-gray-900 truncate group-hover:text-blue-700">
+															{attachment.name}
+														</p>
+														<p class="text-xs text-gray-500 mt-1 truncate">
+															{attachment.url}
+														</p>
+													</div>
+													<svg class="h-5 w-5 text-gray-400 group-hover:text-blue-600 flex-shrink-0 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
+													</svg>
+												</a>
+											{/each}
+										</div>
+									</div>
+								{/if}
+							{/if}
 						{/if}
-						
+
 						<!-- レッスン完了ボタン -->
-						<div class="mb-4">
+						<div class="border-t border-gray-200 pt-6">
 							{#if isLessonCompleted(selectedLesson.id)}
 								<div class="bg-green-50 border border-green-200 rounded-lg p-4">
 									<div class="flex items-center text-green-800 mb-2">
@@ -366,55 +594,10 @@
 								</button>
 							{/if}
 						</div>
-						
-						<!-- レッスンタイトルとナビゲーション -->
-						<div class="flex items-center justify-between mb-4">
-							<div class="flex-1">
-								<h2 class="text-2xl font-bold text-gray-900">{selectedLesson.title}</h2>
-								{#if selectedLesson.description}
-									<p class="text-gray-600 mt-2">{selectedLesson.description}</p>
-								{/if}
-							</div>
-							<button
-								on:click={showOverview}
-								class="flex items-center text-blue-600 hover:text-blue-800 text-sm ml-4"
-							>
-								<svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"/>
-								</svg>
-								概要に戻る
-							</button>
-						</div>
-
-						<!-- レッスン詳細コンテンツ -->
-						{#if selectedLesson.content}
-							<div class="border-t border-gray-200 pt-6 pb-6">
-								<div class="prose max-w-none">
-									<div class="text-gray-800 leading-relaxed whitespace-pre-line text-base">
-										{selectedLesson.content}
-									</div>
-								</div>
-							</div>
-						{/if}
-
-						<!-- レッスンアクション -->
-						<div class="flex items-center justify-between pt-4 border-t border-gray-200">
-							<button
-								class="px-4 py-2 bg-gray-200 text-gray-700 rounded-lg hover:bg-gray-300 transition-colors text-sm"
-								disabled
-							>
-								← 前のレッスン
-							</button>
-
-							<button
-								class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors text-sm"
-							>
-								完了して次へ →
-							</button>
-						</div>
 					{/if}
 				</div>
 			</div>
-		</div>
+			</div>
+		{/if}
 	{/if}
 </div>

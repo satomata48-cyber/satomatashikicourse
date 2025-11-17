@@ -864,6 +864,46 @@ export class CourseManager {
 	static async deleteCourse(db: DatabaseAdapter, courseId: string) {
 		await db.prepare('DELETE FROM courses WHERE id = ?').bind(courseId).run();
 	}
+
+	/**
+	 * コース購入チェック
+	 */
+	static async hasStudentPurchasedCourse(
+		db: DatabaseAdapter,
+		courseId: string,
+		studentId: string
+	): Promise<boolean> {
+		const result = await db
+			.prepare(
+				'SELECT id FROM course_purchases WHERE course_id = ? AND student_id = ? AND status = ?'
+			)
+			.bind(courseId, studentId, 'completed')
+			.first();
+
+		return !!result;
+	}
+
+	/**
+	 * コースが無料または購入済みかチェック
+	 */
+	static async canStudentAccessCourse(
+		db: DatabaseAdapter,
+		courseId: string,
+		studentId: string | null
+	): Promise<boolean> {
+		// コース情報を取得
+		const course = await CourseManager.getCourseById(db, courseId);
+		if (!course) return false;
+
+		// 無料コースは誰でもアクセス可能
+		if (course.is_free) return true;
+
+		// 有料コースの場合、ログインしていないとアクセス不可
+		if (!studentId) return false;
+
+		// 購入済みかチェック
+		return await CourseManager.hasStudentPurchasedCourse(db, courseId, studentId);
+	}
 }
 
 export class PasswordResetManager {
@@ -951,21 +991,26 @@ export class LessonManager {
 		await db
 			.prepare(
 				`INSERT INTO lessons (
-					id, course_id, title, description, content, video_url, video_type,
-					duration, order_index, is_published, created_at, updated_at
-				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
+					id, course_id, title, description, content, content_before, content_after,
+					video_url, video_type, duration, order_index, is_published, attachments, sections,
+					created_at, updated_at
+				) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)`
 			)
 			.bind(
 				lesson.id,
 				lesson.course_id,
 				lesson.title,
 				lesson.description || null,
-				lesson.content || null,
+				lesson.content || null, // 後方互換性のため残す
+				lesson.content_before || null,
+				lesson.content_after || null,
 				lesson.video_url || null,
 				lesson.video_type || null,
 				lesson.duration || null,
 				lesson.order_index || 0,
-				lesson.is_published ? 1 : 0
+				lesson.is_published ? 1 : 0,
+				lesson.attachments || null,
+				lesson.sections || null
 			)
 			.run();
 
@@ -991,6 +1036,14 @@ export class LessonManager {
 			fields.push('content = ?');
 			values.push(updates.content);
 		}
+		if (updates.content_before !== undefined) {
+			fields.push('content_before = ?');
+			values.push(updates.content_before);
+		}
+		if (updates.content_after !== undefined) {
+			fields.push('content_after = ?');
+			values.push(updates.content_after);
+		}
 		if (updates.video_url !== undefined) {
 			fields.push('video_url = ?');
 			values.push(updates.video_url);
@@ -1010,6 +1063,14 @@ export class LessonManager {
 		if (updates.is_published !== undefined) {
 			fields.push('is_published = ?');
 			values.push(updates.is_published ? 1 : 0);
+		}
+		if (updates.attachments !== undefined) {
+			fields.push('attachments = ?');
+			values.push(updates.attachments);
+		}
+		if (updates.sections !== undefined) {
+			fields.push('sections = ?');
+			values.push(updates.sections);
 		}
 
 		if (fields.length === 0) return null;

@@ -7,10 +7,11 @@
 	$: username = $page.params.username
 
 	let spaces: any[] = []
+	let selectedSpaceId: string = ''
+	let students: any[] = []
 	let loading = true
+	let loadingStudents = false
 	let error = ''
-	let themeColor = '#3B82F6' // デフォルト
-	let creatingTestStudent: { [key: string]: boolean } = {}
 	let successMessage = ''
 
 	onMount(async () => {
@@ -34,6 +35,12 @@
 			}
 
 			spaces = result.spaces || []
+
+			// 最初のスペースを自動選択
+			if (spaces.length > 0 && !selectedSpaceId) {
+				selectedSpaceId = spaces[0].id
+				await loadStudents()
+			}
 		} catch (err: any) {
 			error = err.message
 			console.error('Load spaces error:', err)
@@ -42,39 +49,77 @@
 		}
 	}
 
-	async function createTestStudent(spaceId: string) {
-		creatingTestStudent[spaceId] = true
+	async function loadStudents() {
+		if (!selectedSpaceId) return
+
+		loadingStudents = true
 		error = ''
-		successMessage = ''
 
 		try {
-			const response = await fetch('/api/create-test-student', {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ spaceId })
+			const response = await fetch(`/api/students?spaceId=${selectedSpaceId}`)
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || '生徒の取得に失敗しました')
+			}
+
+			students = result.students || []
+		} catch (err: any) {
+			error = err.message
+			console.error('Load students error:', err)
+		} finally {
+			loadingStudents = false
+		}
+	}
+
+	async function handleSpaceChange(event: Event) {
+		const target = event.target as HTMLSelectElement
+		selectedSpaceId = target.value
+		await loadStudents()
+	}
+
+	async function removeStudent(studentId: string) {
+		if (!confirm('この生徒をスペースから削除しますか？')) {
+			return
+		}
+
+		try {
+			const response = await fetch(`/api/students`, {
+				method: 'DELETE',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					spaceId: selectedSpaceId,
+					studentId
+				})
 			})
 
 			const result = await response.json()
 
 			if (!response.ok) {
-				throw new Error(result.error || 'テスト生徒の作成に失敗しました')
+				throw new Error(result.error || '生徒の削除に失敗しました')
 			}
 
-			successMessage = 'テスト生徒アカウント（satomata48@gmail.com）が作成され、このスペースに登録されました。パスワード: satomata4848'
+			successMessage = '生徒を削除しました'
+			await loadStudents()
 		} catch (err: any) {
 			error = err.message
-		} finally {
-			creatingTestStudent[spaceId] = false
 		}
+	}
+
+	function formatDate(dateString: string): string {
+		const date = new Date(dateString)
+		return date.toLocaleDateString('ja-JP', {
+			year: 'numeric',
+			month: 'long',
+			day: 'numeric'
+		})
 	}
 </script>
 
 <div class="max-w-7xl mx-auto">
 	<div class="mb-8">
-		<h1 class="text-3xl font-bold text-gray-900">生徒ページ管理</h1>
-		<p class="mt-2 text-gray-600">生徒が実際に見ているページを確認できます</p>
+		<h1 class="text-3xl font-bold text-gray-900">生徒管理</h1>
+		<p class="mt-2 text-gray-600">スペースに登録されている生徒を管理できます</p>
 	</div>
 
 	{#if successMessage}
@@ -89,13 +134,15 @@
 		</div>
 	{/if}
 
+	{#if error}
+		<div class="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
+			{error}
+		</div>
+	{/if}
+
 	{#if loading}
 		<div class="flex justify-center items-center h-64">
 			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-		</div>
-	{:else if error}
-		<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-			{error}
 		</div>
 	{:else if spaces.length === 0}
 		<div class="text-center py-12 bg-white rounded-lg shadow">
@@ -117,101 +164,110 @@
 			</div>
 		</div>
 	{:else}
-		<div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-			{#each spaces as space}
-				{@const primaryColor = space.landing_page_content?.theme?.primaryColor || '#3B82F6'}
-				{@const courseCount = space.course_count || 0}
+		<!-- スペース選択 -->
+		<div class="mb-6 bg-white rounded-lg shadow p-6">
+			<label for="space-select" class="block text-sm font-medium text-gray-700 mb-2">
+				スペースを選択
+			</label>
+			<select
+				id="space-select"
+				bind:value={selectedSpaceId}
+				on:change={handleSpaceChange}
+				class="block w-full md:w-96 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+			>
+				{#each spaces as space}
+					<option value={space.id}>{space.title}</option>
+				{/each}
+			</select>
+		</div>
 
-				<div class="bg-white rounded-lg shadow-md hover:shadow-lg transition-shadow overflow-hidden">
-					<!-- ヘッダー -->
-					<div class="p-6 border-b border-gray-200" style="background: linear-gradient(135deg, {primaryColor}15, {primaryColor}05)">
-						<div class="flex items-start justify-between">
-							<div class="flex-1 min-w-0">
-								<h3 class="text-xl font-bold text-gray-900 truncate">
-									{space.title}
-								</h3>
-								{#if space.description}
-									<p class="mt-2 text-sm text-gray-600 line-clamp-2">
-										{space.description}
-									</p>
-								{/if}
-							</div>
-							<div class="ml-3 flex-shrink-0">
-								{#if space.is_active}
-									<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
-										公開中
-									</span>
-								{:else}
-									<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-800">
-										非公開
-									</span>
-								{/if}
-							</div>
-						</div>
-					</div>
+		<!-- 生徒一覧 -->
+		<div class="bg-white rounded-lg shadow">
+			<div class="px-6 py-4 border-b border-gray-200">
+				<h2 class="text-lg font-semibold text-gray-900">登録生徒一覧</h2>
+			</div>
 
-					<!-- 統計情報 -->
-					<div class="px-6 py-4 bg-gray-50 border-b border-gray-200">
-						<div class="flex items-center text-sm text-gray-600">
-							<svg class="h-5 w-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
-							</svg>
-							<span>{courseCount} コース</span>
-						</div>
-					</div>
-
-					<!-- アクションボタン -->
-					<div class="px-6 py-4 space-y-2">
-					<button
-						on:click={() => createTestStudent(space.id)}
-						disabled={creatingTestStudent[space.id]}
-						class="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-purple-600 hover:bg-purple-700 disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-					>
-						{#if creatingTestStudent[space.id]}
-							<svg class="animate-spin h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"/>
-							</svg>
-							作成中...
-						{:else}
-							<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M18 9v3m0 0v3m0-3h3m-3 0h-3m-2-5a4 4 0 11-8 0 4 4 0 018 0zM3 20a6 6 0 0112 0v1H3v-1z"/>
-							</svg>
-							テスト生徒を作成
-						{/if}
-					</button>
-
-						<a
-							href="/{username}/space/{space.slug}/student/login"
-							target="_blank"
-							class="w-full flex items-center justify-center px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white hover:opacity-90 transition-opacity"
-							style="background-color: {primaryColor || '#3B82F6'}"
-						>
-							<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"/>
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z"/>
-							</svg>
-							生徒ダッシュボード
-							<svg class="h-4 w-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-							</svg>
-						</a>
-
-						<a
-							href="/{username}/space/{space.slug}"
-							target="_blank"
-							class="w-full flex items-center justify-center px-4 py-2 border border-gray-300 rounded-md shadow-sm text-sm font-medium text-gray-700 bg-white hover:bg-gray-50 transition-colors"
-						>
-							<svg class="h-4 w-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/>
-							</svg>
-							ランディングページ
-							<svg class="h-4 w-4 ml-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/>
-							</svg>
-						</a>
-					</div>
+			{#if loadingStudents}
+				<div class="flex justify-center items-center h-64">
+					<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
 				</div>
-			{/each}
+			{:else if students.length === 0}
+				<div class="text-center py-12">
+					<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
+					</svg>
+					<h3 class="mt-2 text-sm font-medium text-gray-900">生徒がいません</h3>
+					<p class="mt-1 text-sm text-gray-500">このスペースにはまだ生徒が登録されていません</p>
+				</div>
+			{:else}
+				<div class="overflow-x-auto">
+					<table class="min-w-full divide-y divide-gray-200">
+						<thead class="bg-gray-50">
+							<tr>
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									メールアドレス
+								</th>
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									ユーザー名
+								</th>
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									ステータス
+								</th>
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									登録日
+								</th>
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									アクション
+								</th>
+							</tr>
+						</thead>
+						<tbody class="bg-white divide-y divide-gray-200">
+							{#each students as student}
+								<tr class="hover:bg-gray-50">
+									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+										{student.email}
+									</td>
+									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+										{student.username || '-'}
+									</td>
+									<td class="px-6 py-4 whitespace-nowrap">
+										{#if student.status === 'active'}
+											<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
+												アクティブ
+											</span>
+										{:else if student.status === 'inactive'}
+											<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
+												非アクティブ
+											</span>
+										{:else}
+											<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-red-100 text-red-800">
+												停止中
+											</span>
+										{/if}
+									</td>
+									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+										{formatDate(student.enrolled_at || student.created_at)}
+									</td>
+									<td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+										<button
+											on:click={() => removeStudent(student.student_id)}
+											class="text-red-600 hover:text-red-900"
+										>
+											削除
+										</button>
+									</td>
+								</tr>
+							{/each}
+						</tbody>
+					</table>
+				</div>
+
+				<div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
+					<p class="text-sm text-gray-500">
+						合計 {students.length} 人の生徒が登録されています
+					</p>
+				</div>
+			{/if}
 		</div>
 	{/if}
 </div>
