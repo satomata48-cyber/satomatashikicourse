@@ -28,32 +28,41 @@ export const load: PageServerLoad = async ({ params, locals, platform }) => {
 		throw error(403, 'Forbidden');
 	}
 
-	// 購入者一覧を取得（course_purchasesとstudentsを結合）
-	const purchasers = await db
+	// スペースに登録されている生徒を取得し、購入状況も含める
+	const studentsWithPurchases = await db
 		.prepare(`
 			SELECT
-				cp.id,
-				cp.course_id,
-				cp.student_id,
-				cp.amount,
-				cp.currency,
-				cp.status,
-				cp.stripe_session_id,
-				cp.stripe_payment_intent_id,
-				cp.purchased_at,
+				s.id as student_id,
 				s.email,
 				s.username,
-				s.display_name
-			FROM course_purchases cp
-			LEFT JOIN students s ON cp.student_id = s.id
-			WHERE cp.course_id = ?
-			ORDER BY cp.purchased_at DESC
+				s.display_name,
+				ss.enrolled_at,
+				ss.status as student_status,
+				cp.id as purchase_id,
+				cp.amount,
+				cp.currency,
+				cp.status as purchase_status,
+				cp.stripe_session_id,
+				cp.stripe_payment_intent_id,
+				cp.purchased_at
+			FROM space_students ss
+			INNER JOIN students s ON ss.student_id = s.id
+			LEFT JOIN course_purchases cp ON cp.student_id = s.id AND cp.course_id = ?
+			WHERE ss.space_id = ?
+			ORDER BY cp.purchased_at DESC, ss.enrolled_at DESC
 		`)
-		.bind(courseId)
+		.bind(courseId, course.space_id)
 		.all();
+
+	// スペース情報も取得
+	const space = await db
+		.prepare('SELECT id, title, slug FROM spaces WHERE id = ?')
+		.bind(course.space_id)
+		.first();
 
 	return {
 		course,
-		purchasers: purchasers.results || []
+		space,
+		students: studentsWithPurchases.results || []
 	};
 };

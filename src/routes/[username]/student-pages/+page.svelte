@@ -1,110 +1,50 @@
 <script lang="ts">
-	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
 
 	export let data
 
 	$: username = $page.params.username
+	$: spaces = data.spaces || []
+	$: allStudents = data.students || []
 
-	let spaces: any[] = []
+	// フィルタとソート
 	let selectedSpaceId: string = ''
-	let students: any[] = []
-	let loading = true
-	let loadingStudents = false
-	let error = ''
-	let successMessage = ''
+	let purchaseFilter: string = 'all' // all, purchased, unpurchased
+	let sortBy: string = 'enrolled_date' // enrolled_date, email, purchases, spent
 
-	onMount(async () => {
-		await loadSpaces()
-	})
+	// フィルタリングとソート
+	$: filteredAndSortedStudents = (() => {
+		let result = [...allStudents]
 
-	async function loadSpaces() {
-		loading = true
-		try {
-			if (!username) {
-				error = 'ユーザー名が必要です'
-				return
-			}
-
-			// APIからスペース情報を取得
-			const response = await fetch(`/api/spaces?username=${username}`)
-			const result = await response.json()
-
-			if (!response.ok) {
-				throw new Error(result.error || 'スペースの取得に失敗しました')
-			}
-
-			spaces = result.spaces || []
-
-			// 最初のスペースを自動選択
-			if (spaces.length > 0 && !selectedSpaceId) {
-				selectedSpaceId = spaces[0].id
-				await loadStudents()
-			}
-		} catch (err: any) {
-			error = err.message
-			console.error('Load spaces error:', err)
-		} finally {
-			loading = false
-		}
-	}
-
-	async function loadStudents() {
-		if (!selectedSpaceId) return
-
-		loadingStudents = true
-		error = ''
-
-		try {
-			const response = await fetch(`/api/students?spaceId=${selectedSpaceId}`)
-			const result = await response.json()
-
-			if (!response.ok) {
-				throw new Error(result.error || '生徒の取得に失敗しました')
-			}
-
-			students = result.students || []
-		} catch (err: any) {
-			error = err.message
-			console.error('Load students error:', err)
-		} finally {
-			loadingStudents = false
-		}
-	}
-
-	async function handleSpaceChange(event: Event) {
-		const target = event.target as HTMLSelectElement
-		selectedSpaceId = target.value
-		await loadStudents()
-	}
-
-	async function removeStudent(studentId: string) {
-		if (!confirm('この生徒をスペースから削除しますか？')) {
-			return
+		// スペースでフィルタ
+		if (selectedSpaceId) {
+			result = result.filter(s => s.space_id === selectedSpaceId)
 		}
 
-		try {
-			const response = await fetch(`/api/students`, {
-				method: 'DELETE',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					spaceId: selectedSpaceId,
-					studentId
-				})
-			})
-
-			const result = await response.json()
-
-			if (!response.ok) {
-				throw new Error(result.error || '生徒の削除に失敗しました')
-			}
-
-			successMessage = '生徒を削除しました'
-			await loadStudents()
-		} catch (err: any) {
-			error = err.message
+		// 購入状況でフィルタ
+		if (purchaseFilter === 'purchased') {
+			result = result.filter(s => s.total_purchases > 0)
+		} else if (purchaseFilter === 'unpurchased') {
+			result = result.filter(s => s.total_purchases === 0)
 		}
-	}
+
+		// ソート
+		result.sort((a, b) => {
+			switch (sortBy) {
+				case 'email':
+					return (a.email || '').localeCompare(b.email || '')
+				case 'purchases':
+					return (b.total_purchases || 0) - (a.total_purchases || 0)
+				case 'spent':
+					return (b.total_spent || 0) - (a.total_spent || 0)
+				case 'enrolled_date':
+				default:
+					return new Date(b.enrolled_at).getTime() - new Date(a.enrolled_at).getTime()
+			}
+		})
+
+		return result
+	})()
 
 	function formatDate(dateString: string): string {
 		const date = new Date(dateString)
@@ -114,37 +54,22 @@
 			day: 'numeric'
 		})
 	}
+
+	function formatCurrency(amount: number): string {
+		return new Intl.NumberFormat('ja-JP', {
+			style: 'currency',
+			currency: 'JPY'
+		}).format(amount || 0)
+	}
 </script>
 
 <div class="max-w-7xl mx-auto">
 	<div class="mb-8">
 		<h1 class="text-3xl font-bold text-gray-900">生徒管理</h1>
-		<p class="mt-2 text-gray-600">スペースに登録されている生徒を管理できます</p>
+		<p class="mt-2 text-gray-600">全スペースの生徒を一覧で管理できます</p>
 	</div>
 
-	{#if successMessage}
-		<div class="mb-6 bg-green-50 border border-green-200 text-green-700 px-4 py-3 rounded-lg flex items-start">
-			<svg class="h-5 w-5 mr-2 mt-0.5 flex-shrink-0" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/>
-			</svg>
-			<div>
-				<p class="font-medium">成功</p>
-				<p class="text-sm mt-1">{successMessage}</p>
-			</div>
-		</div>
-	{/if}
-
-	{#if error}
-		<div class="mb-6 bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
-			{error}
-		</div>
-	{/if}
-
-	{#if loading}
-		<div class="flex justify-center items-center h-64">
-			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-		</div>
-	{:else if spaces.length === 0}
+	{#if spaces.length === 0}
 		<div class="text-center py-12 bg-white rounded-lg shadow">
 			<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
@@ -164,40 +89,94 @@
 			</div>
 		</div>
 	{:else}
-		<!-- スペース選択 -->
-		<div class="mb-6 bg-white rounded-lg shadow p-6">
-			<label for="space-select" class="block text-sm font-medium text-gray-700 mb-2">
-				スペースを選択
-			</label>
-			<select
-				id="space-select"
-				bind:value={selectedSpaceId}
-				on:change={handleSpaceChange}
-				class="block w-full md:w-96 px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
-			>
-				{#each spaces as space}
-					<option value={space.id}>{space.title}</option>
-				{/each}
-			</select>
-		</div>
+		<!-- フィルタ・ソートコントロール -->
+		<div class="bg-white rounded-lg shadow p-6 mb-6">
+			<div class="grid grid-cols-1 md:grid-cols-3 gap-4">
+				<!-- スペースフィルタ -->
+				<div>
+					<label for="space-filter" class="block text-sm font-medium text-gray-700 mb-2">
+						スペースで絞り込み
+					</label>
+					<select
+						id="space-filter"
+						bind:value={selectedSpaceId}
+						class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+					>
+						<option value="">すべてのスペース</option>
+						{#each spaces as space}
+							<option value={space.id}>{space.title}</option>
+						{/each}
+					</select>
+				</div>
 
-		<!-- 生徒一覧 -->
-		<div class="bg-white rounded-lg shadow">
-			<div class="px-6 py-4 border-b border-gray-200">
-				<h2 class="text-lg font-semibold text-gray-900">登録生徒一覧</h2>
+				<!-- 購入状況フィルタ -->
+				<div>
+					<label for="purchase-filter" class="block text-sm font-medium text-gray-700 mb-2">
+						購入状況で絞り込み
+					</label>
+					<select
+						id="purchase-filter"
+						bind:value={purchaseFilter}
+						class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+					>
+						<option value="all">すべて</option>
+						<option value="purchased">購入あり</option>
+						<option value="unpurchased">購入なし</option>
+					</select>
+				</div>
+
+				<!-- ソート -->
+				<div>
+					<label for="sort-by" class="block text-sm font-medium text-gray-700 mb-2">
+						並び替え
+					</label>
+					<select
+						id="sort-by"
+						bind:value={sortBy}
+						class="block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500"
+					>
+						<option value="enrolled_date">登録日（新しい順）</option>
+						<option value="email">メールアドレス順</option>
+						<option value="purchases">購入数順</option>
+						<option value="spent">購入金額順</option>
+					</select>
+				</div>
 			</div>
 
-			{#if loadingStudents}
-				<div class="flex justify-center items-center h-64">
-					<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-				</div>
-			{:else if students.length === 0}
+			<div class="mt-4 flex items-center justify-between text-sm text-gray-600">
+				<span>
+					{filteredAndSortedStudents.length} 人の生徒を表示中
+					{#if selectedSpaceId || purchaseFilter !== 'all'}
+						<span class="text-blue-600">（フィルタ適用中）</span>
+					{/if}
+				</span>
+				{#if selectedSpaceId || purchaseFilter !== 'all'}
+					<button
+						on:click={() => {
+							selectedSpaceId = ''
+							purchaseFilter = 'all'
+						}}
+						class="text-blue-600 hover:text-blue-800"
+					>
+						フィルタをクリア
+					</button>
+				{/if}
+			</div>
+		</div>
+
+		<!-- 生徒一覧テーブル -->
+		<div class="bg-white rounded-lg shadow">
+			<div class="px-6 py-4 border-b border-gray-200">
+				<h2 class="text-lg font-semibold text-gray-900">生徒一覧</h2>
+			</div>
+
+			{#if filteredAndSortedStudents.length === 0}
 				<div class="text-center py-12">
 					<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
 					</svg>
-					<h3 class="mt-2 text-sm font-medium text-gray-900">生徒がいません</h3>
-					<p class="mt-1 text-sm text-gray-500">このスペースにはまだ生徒が登録されていません</p>
+					<h3 class="mt-2 text-sm font-medium text-gray-900">該当する生徒がいません</h3>
+					<p class="mt-1 text-sm text-gray-500">フィルタ条件を変更してください</p>
 				</div>
 			{:else}
 				<div class="overflow-x-auto">
@@ -205,37 +184,65 @@
 						<thead class="bg-gray-50">
 							<tr>
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-									メールアドレス
+									生徒情報
 								</th>
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-									ユーザー名
+									スペース
 								</th>
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-									ステータス
+									購入数
+								</th>
+								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+									総購入額
 								</th>
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
 									登録日
 								</th>
 								<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-									アクション
+									ステータス
 								</th>
 							</tr>
 						</thead>
 						<tbody class="bg-white divide-y divide-gray-200">
-							{#each students as student}
+							{#each filteredAndSortedStudents as student}
 								<tr class="hover:bg-gray-50">
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-										{student.email}
-									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-										{student.username || '-'}
+									<td class="px-6 py-4 whitespace-nowrap">
+										<div class="text-sm font-medium text-gray-900">
+											{student.display_name || student.username || '-'}
+										</div>
+										<div class="text-sm text-gray-500">
+											{student.email}
+										</div>
 									</td>
 									<td class="px-6 py-4 whitespace-nowrap">
-										{#if student.status === 'active'}
+										<div class="text-sm text-gray-900">{student.space_title}</div>
+										<div class="text-xs text-gray-500">/{student.space_slug}</div>
+									</td>
+									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+										{#if student.total_purchases > 0}
+											<span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+												{student.total_purchases}件
+											</span>
+										{:else}
+											<span class="text-gray-400">-</span>
+										{/if}
+									</td>
+									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+										{#if student.total_spent > 0}
+											{formatCurrency(student.total_spent)}
+										{:else}
+											<span class="text-gray-400">-</span>
+										{/if}
+									</td>
+									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+										{formatDate(student.enrolled_at)}
+									</td>
+									<td class="px-6 py-4 whitespace-nowrap">
+										{#if student.student_status === 'active'}
 											<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-green-100 text-green-800">
 												アクティブ
 											</span>
-										{:else if student.status === 'inactive'}
+										{:else if student.student_status === 'inactive'}
 											<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full bg-gray-100 text-gray-800">
 												非アクティブ
 											</span>
@@ -245,17 +252,6 @@
 											</span>
 										{/if}
 									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-										{formatDate(student.enrolled_at || student.created_at)}
-									</td>
-									<td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
-										<button
-											on:click={() => removeStudent(student.student_id)}
-											class="text-red-600 hover:text-red-900"
-										>
-											削除
-										</button>
-									</td>
 								</tr>
 							{/each}
 						</tbody>
@@ -263,9 +259,16 @@
 				</div>
 
 				<div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
-					<p class="text-sm text-gray-500">
-						合計 {students.length} 人の生徒が登録されています
-					</p>
+					<div class="flex justify-between items-center">
+						<p class="text-sm text-gray-500">
+							合計 {allStudents.length} 人の生徒が登録されています
+						</p>
+						<div class="text-sm text-gray-900">
+							総売上: {formatCurrency(
+								allStudents.reduce((sum, s) => sum + (s.total_spent || 0), 0)
+							)}
+						</div>
+					</div>
 				</div>
 			{/if}
 		</div>

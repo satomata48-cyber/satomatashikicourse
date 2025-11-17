@@ -5,9 +5,15 @@
 
 	$: username = $page.params.username
 	$: course = data.course
-	$: purchasers = data.purchasers || []
+	$: space = data.space
+	$: students = data.students || []
 
-	function formatDate(dateString: string): string {
+	// 購入済みと未購入を分ける
+	$: purchasedStudents = students.filter(s => s.purchase_id)
+	$: unpurchasedStudents = students.filter(s => !s.purchase_id)
+
+	function formatDate(dateString: string | null): string {
+		if (!dateString) return '-'
 		const date = new Date(dateString)
 		return date.toLocaleDateString('ja-JP', {
 			year: 'numeric',
@@ -25,10 +31,13 @@
 		}).format(amount)
 	}
 
-	function getStatusBadge(status: string) {
+	function getPurchaseStatusBadge(status: string | null) {
+		if (!status) {
+			return { class: 'bg-gray-100 text-gray-800', text: '未購入' }
+		}
 		switch (status) {
 			case 'completed':
-				return { class: 'bg-green-100 text-green-800', text: '完了' }
+				return { class: 'bg-green-100 text-green-800', text: '購入済み' }
 			case 'pending':
 				return { class: 'bg-yellow-100 text-yellow-800', text: '保留中' }
 			case 'failed':
@@ -58,25 +67,28 @@
 		<div class="bg-white rounded-lg shadow p-4">
 			<h2 class="text-xl font-semibold text-gray-900 mb-2">{course.title}</h2>
 			<div class="flex items-center space-x-4 text-sm text-gray-600">
+				<span>スペース: {space?.title || '-'}</span>
 				<span>価格: {course.is_free ? '無料' : formatCurrency(course.price, course.currency)}</span>
-				<span>購入者数: {purchasers.length}人</span>
+				<span>購入済み: {purchasedStudents.length}人</span>
+				<span>未購入: {unpurchasedStudents.length}人</span>
 			</div>
 		</div>
 	</div>
 
-	<!-- 購入者一覧 -->
+	<!-- 生徒一覧（購入状況込み） -->
 	<div class="bg-white rounded-lg shadow">
 		<div class="px-6 py-4 border-b border-gray-200">
-			<h2 class="text-lg font-semibold text-gray-900">購入者一覧</h2>
+			<h2 class="text-lg font-semibold text-gray-900">スペース生徒一覧（購入状況）</h2>
+			<p class="text-sm text-gray-500 mt-1">このスペースに登録されている全生徒と購入状況を表示します</p>
 		</div>
 
-		{#if purchasers.length === 0}
+		{#if students.length === 0}
 			<div class="text-center py-12">
 				<svg class="mx-auto h-12 w-12 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 9V7a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2m2 4h10a2 2 0 002-2v-6a2 2 0 00-2-2H9a2 2 0 00-2 2v6a2 2 0 002 2zm7-5a2 2 0 11-4 0 2 2 0 014 0z"/>
+					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z"/>
 				</svg>
-				<h3 class="mt-2 text-sm font-medium text-gray-900">購入者がいません</h3>
-				<p class="mt-1 text-sm text-gray-500">このコースはまだ購入されていません</p>
+				<h3 class="mt-2 text-sm font-medium text-gray-900">生徒がいません</h3>
+				<p class="mt-1 text-sm text-gray-500">このスペースにはまだ生徒が登録されていません</p>
 			</div>
 		{:else}
 			<div class="overflow-x-auto">
@@ -87,50 +99,52 @@
 								生徒情報
 							</th>
 							<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-								購入金額
+								購入状況
 							</th>
 							<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-								ステータス
+								購入金額
 							</th>
 							<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
 								購入日時
 							</th>
 							<th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
-								決済ID
+								スペース登録日
 							</th>
 						</tr>
 					</thead>
 					<tbody class="bg-white divide-y divide-gray-200">
-						{#each purchasers as purchaser}
-							<tr class="hover:bg-gray-50">
+						{#each students as student}
+							<tr class="hover:bg-gray-50 {student.purchase_id ? 'bg-green-50/30' : ''}">
 								<td class="px-6 py-4 whitespace-nowrap">
-									<div class="text-sm font-medium text-gray-900">
-										{purchaser.display_name || purchaser.username || '-'}
-									</div>
-									<div class="text-sm text-gray-500">
-										{purchaser.email}
+									<div class="flex items-center">
+										<div>
+											<div class="text-sm font-medium text-gray-900">
+												{student.display_name || student.username || '-'}
+											</div>
+											<div class="text-sm text-gray-500">
+												{student.email}
+											</div>
+										</div>
 									</div>
 								</td>
-								<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
-									{formatCurrency(purchaser.amount, purchaser.currency)}
-								</td>
 								<td class="px-6 py-4 whitespace-nowrap">
-									{@const badge = getStatusBadge(purchaser.status)}
+									{@const badge = getPurchaseStatusBadge(student.purchase_status)}
 									<span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full {badge.class}">
 										{badge.text}
 									</span>
 								</td>
-								<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-									{formatDate(purchaser.purchased_at)}
-								</td>
-								<td class="px-6 py-4 text-sm text-gray-500">
-									{#if purchaser.stripe_payment_intent_id}
-										<div class="max-w-xs truncate" title={purchaser.stripe_payment_intent_id}>
-											{purchaser.stripe_payment_intent_id}
-										</div>
+								<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+									{#if student.purchase_id}
+										{formatCurrency(student.amount || 0, student.currency || 'JPY')}
 									{:else}
 										<span class="text-gray-400">-</span>
 									{/if}
+								</td>
+								<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+									{formatDate(student.purchased_at)}
+								</td>
+								<td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
+									{formatDate(student.enrolled_at)}
 								</td>
 							</tr>
 						{/each}
@@ -141,13 +155,13 @@
 			<div class="px-6 py-4 bg-gray-50 border-t border-gray-200">
 				<div class="flex justify-between items-center">
 					<p class="text-sm text-gray-500">
-						合計 {purchasers.length} 人が購入しています
+						合計 {students.length} 人中 {purchasedStudents.length} 人が購入済み
 					</p>
 					<div class="text-sm font-medium text-gray-900">
 						総売上: {formatCurrency(
-							purchasers
-								.filter(p => p.status === 'completed')
-								.reduce((sum, p) => sum + p.amount, 0),
+							purchasedStudents
+								.filter(s => s.purchase_status === 'completed')
+								.reduce((sum, s) => sum + (s.amount || 0), 0),
 							course.currency
 						)}
 					</div>
