@@ -1,13 +1,9 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import Stripe from 'stripe'
-import { STRIPE_SECRET_KEY } from '$env/static/private'
+import { getStripe } from '$lib/stripe-server'
 
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-	typescript: true
-})
-
-export const POST: RequestHandler = async ({ request, locals }) => {
+export const POST: RequestHandler = async ({ request, locals, platform }) => {
+	const stripe = getStripe(platform)
 	try {
 		if (!locals.user) {
 			return json({ error: 'Unauthorized' }, { status: 401 })
