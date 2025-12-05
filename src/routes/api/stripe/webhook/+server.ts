@@ -1,16 +1,20 @@
 import { json } from '@sveltejs/kit'
 import type { RequestHandler } from './$types'
-import Stripe from 'stripe'
-import { STRIPE_SECRET_KEY, STRIPE_WEBHOOK_SECRET } from '$env/static/private'
-
-const stripe = new Stripe(STRIPE_SECRET_KEY, {
-	typescript: true
-})
+import type Stripe from 'stripe'
+import { getStripe } from '$lib/stripe-server'
 
 // TODO: D1実装が必要
 
-export const POST: RequestHandler = async ({ request }) => {
+export const POST: RequestHandler = async ({ request, platform }) => {
 	try {
+		const stripe = getStripe(platform)
+		const webhookSecret = platform?.env?.STRIPE_WEBHOOK_SECRET
+
+		if (!webhookSecret) {
+			console.error('STRIPE_WEBHOOK_SECRET is not configured')
+			return json({ error: 'Webhook not configured' }, { status: 500 })
+		}
+
 		const body = await request.text()
 		const signature = request.headers.get('stripe-signature')
 
@@ -21,7 +25,7 @@ export const POST: RequestHandler = async ({ request }) => {
 		let event: Stripe.Event
 
 		try {
-			event = stripe.webhooks.constructEvent(body, signature, STRIPE_WEBHOOK_SECRET)
+			event = stripe.webhooks.constructEvent(body, signature, webhookSecret)
 		} catch (err: any) {
 			console.error('Webhook signature verification failed:', err.message)
 			return json({ error: 'Invalid signature' }, { status: 400 })
