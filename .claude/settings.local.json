@@ -28,7 +28,10 @@
       "Bash(findstr:*)",
       "Bash(taskkill:*)",
       "Bash(cmd.exe /c \"taskkill /IM node.exe /F\")",
-      "Bash(npm run check:*)"
+      "Bash(npm run check:*)",
+      "WebFetch(domain:satomatashikicourse.pages.dev)",
+      "Bash(wrangler pages deploy:*)",
+      "WebFetch(domain:15a408ec.satomatashikicourse.pages.dev)"
     ],
     "deny": [],
     "ask": []

@@ -1,0 +1,32 @@
+# このプロジェクト専用のデプロイワークフロー
+# Cloudflare Pagesへの手動デプロイのみを許可
+
+name: Deploy to Cloudflare Pages
+
+on:
+  # 手動トリガーのみ
+  workflow_dispatch:
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: '20'
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Build
+        run: npm run build
+
+      - name: Deploy to Cloudflare Pages
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: pages deploy .svelte-kit/cloudflare --project-name=satomatashikicourse
