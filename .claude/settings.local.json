@@ -31,7 +31,9 @@
       "Bash(npm run check:*)",
       "WebFetch(domain:satomatashikicourse.pages.dev)",
       "Bash(wrangler pages deploy:*)",
-      "WebFetch(domain:15a408ec.satomatashikicourse.pages.dev)"
+      "WebFetch(domain:15a408ec.satomatashikicourse.pages.dev)",
+      "WebFetch(domain:0816dec4.satomatashikicourse.pages.dev)",
+      "WebSearch"
     ],
     "deny": [],
     "ask": []

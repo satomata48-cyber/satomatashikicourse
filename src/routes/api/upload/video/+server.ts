@@ -78,7 +78,7 @@ export const POST: RequestHandler = async ({ request, locals, platform }) => {
 		});
 
 		// 公開URLを生成
-		const url = `https://pub-satomatashikicourse.r2.dev/${key}`;
+		const url = `https://pub-bde867b9de4420c93bdc797d254ea437.r2.dev/${key}`;
 
 		return json({
 			success: true,
@@ -132,7 +132,7 @@ export const GET: RequestHandler = async ({ url, locals, platform }) => {
 			})
 			.map(obj => ({
 				key: obj.key,
-				url: `https://pub-satomatashikicourse.r2.dev/${obj.key}`,
+				url: `https://pub-bde867b9de4420c93bdc797d254ea437.r2.dev/${obj.key}`,
 				name: obj.key.split('/').pop()?.replace(/^\d+-/, '') || obj.key,
 				size: obj.size,
 				uploaded: obj.uploaded

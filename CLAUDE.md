@@ -1,3 +1,19 @@
+# ⚠️ 重要: プロジェクト識別
+
+**このプロジェクトは `satomatashikicourse` です。**
+
+- プロジェクト名: `satomatashikicourse`
+- ディレクトリ: `C:\Users\lipto\desktop\satomatashikicourse`
+- Cloudflare Pages: `satomatashikicourse.pages.dev`
+
+**他のプロジェクト（satomatashikitask等）のClaudeセッションは、このディレクトリを操作しないでください。**
+
+作業前に必ず確認:
+1. 現在のディレクトリが正しいか (`pwd` で確認)
+2. 自分が担当しているプロジェクト名と一致するか
+
+---
+
 # SvelteKit オンラインコース販売プラットフォーム
 
 ## 📋 プロジェクト概要
