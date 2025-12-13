@@ -14,6 +14,14 @@
 	let loading = true
 	let error = ''
 
+	// R2動画関連
+	let showVideoModal = false
+	let r2Videos: any[] = []
+	let loadingVideos = false
+	let uploadingVideo = false
+	let uploadProgress = 0
+	let currentVideoSectionIndex: number | null = null
+
 	// セクションの型定義
 	interface Section {
 		id: string
@@ -60,7 +68,7 @@
 		{
 			name: '動画',
 			icon: '🎥',
-			description: 'YouTube動画を追加',
+			description: 'YouTube/R2動画を追加',
 			template: {
 				type: 'video',
 				videoType: 'youtube',
@@ -78,6 +86,112 @@
 			}
 		}
 	]
+
+	// R2動画一覧を取得
+	async function loadR2Videos() {
+		loadingVideos = true
+		try {
+			const response = await fetch(`/api/upload/video?courseId=${courseId}`)
+			const result = await response.json()
+			if (response.ok) {
+				r2Videos = result.videos || []
+			}
+		} catch (err) {
+			console.error('Failed to load R2 videos:', err)
+		} finally {
+			loadingVideos = false
+		}
+	}
+
+	// 動画選択モーダルを開く
+	function openVideoModal(sectionIndex: number) {
+		currentVideoSectionIndex = sectionIndex
+		showVideoModal = true
+		loadR2Videos()
+	}
+
+	// R2動画を選択
+	function selectR2Video(video: any) {
+		if (currentVideoSectionIndex !== null) {
+			sections[currentVideoSectionIndex].videoType = 'r2'
+			sections[currentVideoSectionIndex].videoUrl = video.url
+			sections = [...sections]
+		}
+		showVideoModal = false
+		currentVideoSectionIndex = null
+	}
+
+	// 動画をアップロード
+	async function uploadVideo(event: Event) {
+		const input = event.target as HTMLInputElement
+		const file = input.files?.[0]
+		if (!file) return
+
+		uploadingVideo = true
+		uploadProgress = 0
+
+		try {
+			const formData = new FormData()
+			formData.append('file', file)
+			formData.append('courseId', courseId)
+
+			const response = await fetch('/api/upload/video', {
+				method: 'POST',
+				body: formData
+			})
+
+			const result = await response.json()
+
+			if (!response.ok) {
+				throw new Error(result.error || 'アップロードに失敗しました')
+			}
+
+			// アップロード成功後、動画一覧を再読み込み
+			await loadR2Videos()
+
+			// アップロードした動画を自動選択
+			if (currentVideoSectionIndex !== null) {
+				sections[currentVideoSectionIndex].videoType = 'r2'
+				sections[currentVideoSectionIndex].videoUrl = result.url
+				sections = [...sections]
+			}
+
+			alert('動画をアップロードしました')
+		} catch (err: any) {
+			alert(`アップロードに失敗しました: ${err.message}`)
+		} finally {
+			uploadingVideo = false
+			uploadProgress = 0
+			input.value = ''
+		}
+	}
+
+	// 動画を削除
+	async function deleteR2Video(video: any) {
+		if (!confirm(`「${video.name}」を削除しますか？`)) return
+
+		try {
+			const response = await fetch(`/api/upload/video?key=${encodeURIComponent(video.key)}`, {
+				method: 'DELETE'
+			})
+
+			if (!response.ok) {
+				throw new Error('削除に失敗しました')
+			}
+
+			await loadR2Videos()
+		} catch (err: any) {
+			alert(`削除に失敗しました: ${err.message}`)
+		}
+	}
+
+	// ファイルサイズをフォーマット
+	function formatFileSize(bytes: number): string {
+		if (bytes < 1024) return bytes + ' B'
+		if (bytes < 1024 * 1024) return (bytes / 1024).toFixed(1) + ' KB'
+		if (bytes < 1024 * 1024 * 1024) return (bytes / (1024 * 1024)).toFixed(1) + ' MB'
+		return (bytes / (1024 * 1024 * 1024)).toFixed(1) + ' GB'
+	}
 
 	onMount(async () => {
 		await loadData()
@@ -556,14 +670,37 @@
 															class="w-full text-sm border border-gray-300 rounded px-3 py-2"
 														>
 															<option value="youtube">YouTube</option>
-															<option value="external">外部ストレージ</option>
+															<option value="r2">R2ストレージ</option>
+															<option value="external">外部URL</option>
 														</select>
-														<input
-															type="url"
-															bind:value={section.videoUrl}
-															class="w-full text-sm border border-gray-300 rounded px-3 py-2"
-															placeholder={section.videoType === 'youtube' ? 'https://www.youtube.com/watch?v=...' : 'https://video-storage-url...'}
-														/>
+														{#if section.videoType === 'r2'}
+															<div class="flex space-x-2">
+																<input
+																	type="url"
+																	bind:value={section.videoUrl}
+																	class="flex-1 text-sm border border-gray-300 rounded px-3 py-2"
+																	placeholder="R2動画URL"
+																	readonly
+																/>
+																<button
+																	type="button"
+																	on:click={() => openVideoModal(sections.indexOf(section))}
+																	class="px-3 py-2 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+																>
+																	選択
+																</button>
+															</div>
+															{#if section.videoUrl}
+																<p class="text-xs text-green-600">動画が選択されています</p>
+															{/if}
+														{:else}
+															<input
+																type="url"
+																bind:value={section.videoUrl}
+																class="w-full text-sm border border-gray-300 rounded px-3 py-2"
+																placeholder={section.videoType === 'youtube' ? 'https://www.youtube.com/watch?v=...' : 'https://video-url...'}
+															/>
+														{/if}
 													</div>
 												{:else if section.type === 'attachment'}
 													<div class="space-y-2">
@@ -700,6 +837,18 @@
 														></iframe>
 													</div>
 												</div>
+											{:else if section.videoType === 'r2'}
+												<div class="border border-gray-200 rounded-lg overflow-hidden">
+													<div class="aspect-video bg-black">
+														<video
+															src={section.videoUrl}
+															controls
+															class="w-full h-full"
+														>
+															お使いのブラウザは動画再生に対応していません
+														</video>
+													</div>
+												</div>
 											{:else}
 												<div class="border border-gray-200 rounded-lg p-4 bg-gray-50">
 													<p class="text-xs text-gray-600">動画URL: {section.videoUrl}</p>
@@ -797,3 +946,103 @@
 		</div>
 	{/if}
 </div>
+
+<!-- R2動画選択モーダル -->
+{#if showVideoModal}
+	<div class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+		<div class="bg-white rounded-lg shadow-xl w-full max-w-2xl max-h-[80vh] overflow-hidden">
+			<div class="p-4 border-b border-gray-200 flex items-center justify-between">
+				<h3 class="text-lg font-bold text-gray-900">R2から動画を選択</h3>
+				<button
+					on:click={() => { showVideoModal = false; currentVideoSectionIndex = null }}
+					class="text-gray-400 hover:text-gray-600"
+				>
+					<svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+						<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"/>
+					</svg>
+				</button>
+			</div>
+
+			<div class="p-4">
+				<!-- アップロードエリア -->
+				<div class="mb-4 p-4 border-2 border-dashed border-gray-300 rounded-lg text-center">
+					<input
+						type="file"
+						accept="video/*"
+						on:change={uploadVideo}
+						disabled={uploadingVideo}
+						class="hidden"
+						id="video-upload"
+					/>
+					<label
+						for="video-upload"
+						class="cursor-pointer inline-flex items-center px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:opacity-50"
+						class:opacity-50={uploadingVideo}
+					>
+						{#if uploadingVideo}
+							<svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+								<circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+								<path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+							</svg>
+							アップロード中...
+						{:else}
+							<svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12"/>
+							</svg>
+							新しい動画をアップロード
+						{/if}
+					</label>
+					<p class="text-xs text-gray-500 mt-2">MP4, WebM, MOV など（最大500MB）</p>
+				</div>
+
+				<!-- 動画一覧 -->
+				<div class="overflow-y-auto max-h-[400px]">
+					{#if loadingVideos}
+						<div class="flex justify-center py-8">
+							<div class="animate-spin rounded-full h-8 w-8 border-b-2 border-blue-600"></div>
+						</div>
+					{:else if r2Videos.length === 0}
+						<div class="text-center py-8 text-gray-500">
+							<svg class="mx-auto h-12 w-12 text-gray-400 mb-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+								<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+							</svg>
+							<p>アップロードされた動画がありません</p>
+						</div>
+					{:else}
+						<div class="space-y-2">
+							{#each r2Videos as video}
+								<div class="flex items-center justify-between p-3 border border-gray-200 rounded-lg hover:bg-gray-50">
+									<div class="flex items-center space-x-3 flex-1 min-w-0">
+										<div class="flex-shrink-0 w-10 h-10 bg-gray-100 rounded flex items-center justify-center">
+											<svg class="w-5 h-5 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+											</svg>
+										</div>
+										<div class="flex-1 min-w-0">
+											<p class="text-sm font-medium text-gray-900 truncate">{video.name}</p>
+											<p class="text-xs text-gray-500">{formatFileSize(video.size)}</p>
+										</div>
+									</div>
+									<div class="flex items-center space-x-2">
+										<button
+											on:click={() => selectR2Video(video)}
+											class="px-3 py-1 bg-blue-600 text-white text-sm rounded hover:bg-blue-700"
+										>
+											選択
+										</button>
+										<button
+											on:click={() => deleteR2Video(video)}
+											class="px-3 py-1 bg-red-100 text-red-700 text-sm rounded hover:bg-red-200"
+										>
+											削除
+										</button>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			</div>
+		</div>
+	</div>
+{/if}
