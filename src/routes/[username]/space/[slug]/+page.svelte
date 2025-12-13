@@ -467,50 +467,79 @@
 
 			<!-- デフォルトのコース一覧 -->
 			{#if courses.length > 0}
-				<section class="py-16 bg-white">
+				<section class="py-20 bg-gradient-to-b from-gray-50 to-white">
 					<div class="container mx-auto px-6">
-						<div class="text-center mb-12">
-							<h2 class="text-3xl font-bold text-gray-900 mb-4">コース一覧</h2>
-							<p class="text-xl text-gray-600">提供中のコースをご覧ください</p>
+						<div class="text-center mb-16">
+							<span class="inline-block px-4 py-1 rounded-full text-sm font-medium mb-4" style="background-color: {theme.primaryColor}20; color: {theme.primaryColor}">COURSES</span>
+							<h2 class="text-4xl font-bold text-gray-900 mb-4">提供コース</h2>
+							<p class="text-lg text-gray-600 max-w-2xl mx-auto">あなたの成長をサポートするコースをご用意しています</p>
 						</div>
-						<div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+						<div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3 max-w-6xl mx-auto">
 							{#each courses as course}
-								<div class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-100">
-									<div class="p-6">
-										<div class="flex items-start justify-between mb-4">
-											<h3 class="text-xl font-semibold text-gray-900 mb-2">{course.title}</h3>
-											<div class="text-right">
+								<a href="/{username}/space/{slug}/course/{course.slug || course.id}" class="group block">
+									<div class="bg-white rounded-2xl overflow-hidden shadow-sm hover:shadow-2xl transition-all duration-300 transform hover:-translate-y-2 border border-gray-100">
+										<!-- サムネイル部分 -->
+										<div class="relative h-48 overflow-hidden" style="background: linear-gradient(135deg, {theme.primaryColor}, {theme.primaryColor}CC)">
+											<div class="absolute inset-0 flex items-center justify-center">
+												<svg class="w-16 h-16 text-white/30" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"/>
+													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/>
+												</svg>
+											</div>
+											<!-- 価格バッジ -->
+											<div class="absolute top-4 right-4">
 												{#if course.is_free}
-													<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">無料</span>
+													<span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-bold bg-green-500 text-white shadow-lg">
+														無料
+													</span>
 												{:else}
-													<span class="text-lg font-bold text-gray-900">{formatCurrency(course.price, course.currency)}</span>
+													<span class="inline-flex items-center px-4 py-2 rounded-full text-sm font-bold bg-white text-gray-900 shadow-lg">
+														{formatCurrency(course.price, course.currency)}
+													</span>
 												{/if}
 											</div>
 										</div>
-										<p class="text-gray-600 mb-4 line-clamp-3">{course.description || 'このコースについての詳細な説明をご覧いただけます。'}</p>
-										<div class="flex items-center justify-between text-sm text-gray-500 mb-4">
-											<div class="flex items-center space-x-4">
-												<span class="flex items-center">
-													<svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+										<!-- コンテンツ部分 -->
+										<div class="p-6">
+											<h3 class="text-xl font-bold text-gray-900 mb-3 group-hover:text-blue-600 transition-colors line-clamp-2">
+												{course.title}
+											</h3>
+											<p class="text-gray-600 mb-4 line-clamp-2 text-sm leading-relaxed">
+												{course.description || 'このコースについての詳細な説明をご覧いただけます。'}
+											</p>
+											<div class="flex items-center justify-between pt-4 border-t border-gray-100">
+												<div class="flex items-center text-sm text-gray-500">
+													<svg class="h-5 w-5 mr-2" style="color: {theme.primaryColor}" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
 													</svg>
-													{course.lessons?.[0]?.count || 0} レッスン
+													<span>{course.lessons?.[0]?.count || 0} レッスン</span>
+												</div>
+												<span class="inline-flex items-center text-sm font-medium group-hover:translate-x-1 transition-transform" style="color: {theme.primaryColor}">
+													詳細を見る
+													<svg class="ml-1 h-4 w-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5l7 7-7 7"/>
+													</svg>
 												</span>
 											</div>
 										</div>
-										<a href="/{username}/space/{slug}/course/{course.slug || course.id}" class="block w-full text-center text-white py-3 rounded-lg font-medium transition-opacity hover:opacity-90 duration-200" style="background-color: {theme.primaryColor}">
-											詳細を見る
-										</a>
 									</div>
-								</div>
+								</a>
 							{/each}
 						</div>
 					</div>
 				</section>
 			{:else}
-				<section class="py-16 bg-white">
+				<section class="py-20 bg-gradient-to-b from-gray-50 to-white">
 					<div class="container mx-auto px-6 text-center">
-						<p class="text-gray-500">現在公開中のコースはありません</p>
+						<div class="max-w-md mx-auto">
+							<div class="w-20 h-20 mx-auto mb-6 rounded-full bg-gray-100 flex items-center justify-center">
+								<svg class="w-10 h-10 text-gray-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<path stroke-linecap="round" stroke-linejoin="round" stroke-width="1.5" d="M12 6.253v13m0-13C10.832 5.477 9.246 5 7.5 5S4.168 5.477 3 6.253v13C4.168 18.477 5.754 18 7.5 18s3.332.477 4.5 1.253m0-13C13.168 5.477 14.754 5 16.5 5c1.747 0 3.332.477 4.5 1.253v13C19.832 18.477 18.247 18 16.5 18c-1.746 0-3.332.477-4.5 1.253"/>
+								</svg>
+							</div>
+							<p class="text-gray-500 text-lg">現在公開中のコースはありません</p>
+							<p class="text-gray-400 text-sm mt-2">コースが公開されるまでお待ちください</p>
+						</div>
 					</div>
 				</section>
 			{/if}
@@ -519,6 +548,12 @@
 {/if}
 
 <style>
+	.line-clamp-2 {
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
 	.line-clamp-3 {
 		display: -webkit-box;
 		-webkit-line-clamp: 3;
