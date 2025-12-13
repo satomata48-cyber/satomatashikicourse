@@ -464,6 +464,56 @@
 					</div>
 				</div>
 			</section>
+
+			<!-- デフォルトのコース一覧 -->
+			{#if courses.length > 0}
+				<section class="py-16 bg-white">
+					<div class="container mx-auto px-6">
+						<div class="text-center mb-12">
+							<h2 class="text-3xl font-bold text-gray-900 mb-4">コース一覧</h2>
+							<p class="text-xl text-gray-600">提供中のコースをご覧ください</p>
+						</div>
+						<div class="grid gap-8 md:grid-cols-2 lg:grid-cols-3">
+							{#each courses as course}
+								<div class="bg-white rounded-lg shadow-lg overflow-hidden hover:shadow-xl transition-shadow duration-300 border border-gray-100">
+									<div class="p-6">
+										<div class="flex items-start justify-between mb-4">
+											<h3 class="text-xl font-semibold text-gray-900 mb-2">{course.title}</h3>
+											<div class="text-right">
+												{#if course.is_free}
+													<span class="inline-flex items-center px-3 py-1 rounded-full text-sm font-medium bg-green-100 text-green-800">無料</span>
+												{:else}
+													<span class="text-lg font-bold text-gray-900">{formatCurrency(course.price, course.currency)}</span>
+												{/if}
+											</div>
+										</div>
+										<p class="text-gray-600 mb-4 line-clamp-3">{course.description || 'このコースについての詳細な説明をご覧いただけます。'}</p>
+										<div class="flex items-center justify-between text-sm text-gray-500 mb-4">
+											<div class="flex items-center space-x-4">
+												<span class="flex items-center">
+													<svg class="h-4 w-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 10l4.553-2.276A1 1 0 0121 8.618v6.764a1 1 0 01-1.447.894L15 14M5 18h8a2 2 0 002-2V8a2 2 0 00-2-2H5a2 2 0 00-2 2v8a2 2 0 002 2z"/>
+													</svg>
+													{course.lessons?.[0]?.count || 0} レッスン
+												</span>
+											</div>
+										</div>
+										<a href="/{username}/space/{slug}/course/{course.slug || course.id}" class="block w-full text-center text-white py-3 rounded-lg font-medium transition-opacity hover:opacity-90 duration-200" style="background-color: {theme.primaryColor}">
+											詳細を見る
+										</a>
+									</div>
+								</div>
+							{/each}
+						</div>
+					</div>
+				</section>
+			{:else}
+				<section class="py-16 bg-white">
+					<div class="container mx-auto px-6 text-center">
+						<p class="text-gray-500">現在公開中のコースはありません</p>
+					</div>
+				</section>
+			{/if}
 		{/if}
 	</div>
 {/if}
