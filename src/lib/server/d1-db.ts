@@ -1331,3 +1331,130 @@ export class InstructorProfileManager {
 		await db.prepare('DELETE FROM instructor_profiles WHERE id = ?').bind(profileId).run();
 	}
 }
+
+/**
+ * ブログ記事管理
+ */
+export class BlogManager {
+	/**
+	 * スペースIDでブログ記事一覧を取得
+	 */
+	static async getPostsBySpaceId(db: DatabaseAdapter, spaceId: string, includeUnpublished: boolean = false) {
+		const sql = includeUnpublished
+			? 'SELECT * FROM blog_posts WHERE space_id = ? ORDER BY created_at DESC'
+			: 'SELECT * FROM blog_posts WHERE space_id = ? AND is_published = 1 ORDER BY published_at DESC';
+
+		const result = await db
+			.prepare(sql)
+			.bind(spaceId)
+			.all();
+
+		return result.results || [];
+	}
+
+	/**
+	 * ブログ記事をIDで取得
+	 */
+	static async getPostById(db: DatabaseAdapter, id: string) {
+		const result = await db
+			.prepare('SELECT * FROM blog_posts WHERE id = ?')
+			.bind(id)
+			.first();
+
+		return result;
+	}
+
+	/**
+	 * ブログ記事をスラッグで取得
+	 */
+	static async getPostBySlug(db: DatabaseAdapter, spaceId: string, slug: string) {
+		const result = await db
+			.prepare('SELECT * FROM blog_posts WHERE space_id = ? AND slug = ?')
+			.bind(spaceId, slug)
+			.first();
+
+		return result;
+	}
+
+	/**
+	 * ブログ記事作成
+	 */
+	static async createPost(
+		db: DatabaseAdapter,
+		post: {
+			id: string;
+			space_id: string;
+			title: string;
+			slug: string;
+			content?: string;
+			is_published?: boolean;
+		}
+	) {
+		const now = new Date().toISOString();
+		await db
+			.prepare(
+				`INSERT INTO blog_posts (id, space_id, title, slug, content, is_published, created_at, updated_at, published_at)
+				 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)`
+			)
+			.bind(
+				post.id,
+				post.space_id,
+				post.title,
+				post.slug,
+				post.content || null,
+				post.is_published ? 1 : 0,
+				now,
+				now,
+				post.is_published ? now : null
+			)
+			.run();
+
+		return await BlogManager.getPostById(db, post.id);
+	}
+
+	/**
+	 * ブログ記事更新
+	 */
+	static async updatePost(db: DatabaseAdapter, postId: string, updates: any) {
+		const fields: string[] = [];
+		const values: any[] = [];
+
+		if (updates.title !== undefined) {
+			fields.push('title = ?');
+			values.push(updates.title);
+		}
+		if (updates.slug !== undefined) {
+			fields.push('slug = ?');
+			values.push(updates.slug);
+		}
+		if (updates.content !== undefined) {
+			fields.push('content = ?');
+			values.push(updates.content);
+		}
+		if (updates.is_published !== undefined) {
+			fields.push('is_published = ?');
+			values.push(updates.is_published ? 1 : 0);
+			// 公開時にpublished_atを設定
+			if (updates.is_published) {
+				fields.push('published_at = COALESCE(published_at, CURRENT_TIMESTAMP)');
+			}
+		}
+
+		if (fields.length === 0) return null;
+
+		fields.push('updated_at = CURRENT_TIMESTAMP');
+		values.push(postId);
+
+		const sql = `UPDATE blog_posts SET ${fields.join(', ')} WHERE id = ?`;
+		await db.prepare(sql).bind(...values).run();
+
+		return await BlogManager.getPostById(db, postId);
+	}
+
+	/**
+	 * ブログ記事削除
+	 */
+	static async deletePost(db: DatabaseAdapter, postId: string) {
+		await db.prepare('DELETE FROM blog_posts WHERE id = ?').bind(postId).run();
+	}
+}
