@@ -25,11 +25,6 @@
 			icon: 'courses'
 		},
 		{
-			name: 'ブログ管理',
-			href: `/blog`,
-			icon: 'blog'
-		},
-		{
 			name: '決済設定',
 			href: `/payment-settings`,
 			icon: 'payment'

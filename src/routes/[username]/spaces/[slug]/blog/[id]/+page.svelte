@@ -1,15 +1,17 @@
 <script lang="ts">
 	import { onMount } from 'svelte'
 	import { page } from '$app/stores'
-	import { goto } from '$app/navigation'
 
 	$: username = $page.params.username
+	$: spaceSlug = $page.params.slug
 	$: postId = $page.params.id
 
 	let post: any = null
+	let space: any = null
 	let loading = true
 	let saving = false
 	let error = ''
+	let themeColor = '#3B82F6'
 
 	// 編集フィールド
 	let title = ''
@@ -21,10 +23,26 @@
 	let showPreview = false
 
 	onMount(async () => {
-		if (postId) {
+		if (postId && spaceSlug && username) {
+			await loadSpace()
 			await loadPost()
 		}
 	})
+
+	async function loadSpace() {
+		try {
+			const response = await fetch(`/api/spaces?username=${username}&slug=${spaceSlug}`)
+			const result = await response.json()
+			if (response.ok && result.space) {
+				space = result.space
+				if (space?.landing_page_content?.theme?.primaryColor) {
+					themeColor = space.landing_page_content.theme.primaryColor
+				}
+			}
+		} catch (err) {
+			console.error('Failed to load space:', err)
+		}
+	}
 
 	async function loadPost() {
 		loading = true
@@ -97,7 +115,7 @@
 <div class="max-w-6xl mx-auto">
 	{#if loading}
 		<div class="flex justify-center items-center h-64">
-			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
+			<div class="animate-spin rounded-full h-12 w-12 border-b-2" style="border-color: {themeColor}"></div>
 		</div>
 	{:else if error}
 		<div class="bg-red-50 border border-red-200 text-red-600 px-4 py-3 rounded-lg">
@@ -108,7 +126,7 @@
 		<div class="flex justify-between items-center mb-6">
 			<div class="flex items-center space-x-4">
 				<a
-					href="/{username}/blog"
+					href="/{username}/spaces/{spaceSlug}/blog"
 					class="text-gray-600 hover:text-gray-900"
 				>
 					<svg class="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -118,6 +136,13 @@
 				<h2 class="text-2xl font-bold text-gray-900">記事を編集</h2>
 			</div>
 			<div class="flex items-center space-x-3">
+				<a
+					href="/{username}/space/{spaceSlug}/blog/{slug}"
+					target="_blank"
+					class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors text-sm"
+				>
+					公開ページを確認
+				</a>
 				<button
 					on:click={() => showPreview = !showPreview}
 					class="px-4 py-2 border border-gray-300 rounded-lg hover:bg-gray-50 transition-colors"
@@ -128,14 +153,16 @@
 					<input
 						type="checkbox"
 						bind:checked={isPublished}
-						class="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+						class="rounded border-gray-300 focus:ring-2"
+						style="color: {themeColor}"
 					/>
 					<span class="text-sm text-gray-700">公開</span>
 				</label>
 				<button
 					on:click={savePost}
 					disabled={saving}
-					class="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors disabled:opacity-50"
+					class="px-4 py-2 text-white rounded-lg hover:opacity-90 transition-opacity disabled:opacity-50"
+					style="background-color: {themeColor}"
 				>
 					{saving ? '保存中...' : '保存 (Ctrl+S)'}
 				</button>
@@ -152,7 +179,7 @@
 					id="title"
 					type="text"
 					bind:value={title}
-					class="w-full border border-gray-300 rounded-md px-3 py-2 text-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+					class="w-full border border-gray-300 rounded-md px-3 py-2 text-lg focus:ring-2 focus:border-transparent"
 					placeholder="記事のタイトル"
 				/>
 			</div>
@@ -166,7 +193,7 @@
 					id="slug"
 					type="text"
 					bind:value={slug}
-					class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+					class="w-full border border-gray-300 rounded-md px-3 py-2 focus:ring-2 focus:border-transparent"
 					placeholder="url-slug"
 				/>
 			</div>
@@ -189,7 +216,7 @@
 					<textarea
 						id="content"
 						bind:value={content}
-						class="w-full border border-gray-300 rounded-md px-3 py-2 font-mono text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+						class="w-full border border-gray-300 rounded-md px-3 py-2 font-mono text-sm focus:ring-2 focus:border-transparent"
 						rows="25"
 						placeholder="<h2>見出し</h2>
 <p>段落テキスト</p>

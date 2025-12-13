@@ -3,13 +3,12 @@
 	import { page } from '$app/stores'
 
 	$: username = $page.params.username
+	$: spaceSlug = $page.params.slug
 
 	let posts: any[] = []
-	let spaces: any[] = []
+	let space: any = null
 	let loading = true
 	let error = ''
-	let selectedSpace = ''
-	let initialized = false
 	let themeColor = '#3B82F6'
 
 	// 新規作成用
@@ -19,44 +18,38 @@
 	let creating = false
 
 	onMount(async () => {
-		if (username && username !== 'undefined') {
-			const isUUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(username)
-			if (!isUUID && !initialized) {
-				initialized = true
-				await loadSpaces()
-			}
+		if (username && spaceSlug && username !== 'undefined' && spaceSlug !== 'undefined') {
+			await loadSpace()
 		}
 	})
 
-	async function loadSpaces() {
+	async function loadSpace() {
 		try {
-			const response = await fetch(`/api/spaces?username=${username}`)
+			const response = await fetch(`/api/spaces?username=${username}&slug=${spaceSlug}`)
 			const result = await response.json()
 
 			if (!response.ok) {
 				throw new Error(result.error || 'スペースの取得に失敗しました')
 			}
 
-			spaces = result.spaces || []
-
-			// スペースがあれば最初のスペースを選択
-			if (spaces.length > 0) {
-				selectedSpace = spaces[0].id
-				await loadPosts()
+			space = result.space
+			if (space?.landing_page_content?.theme?.primaryColor) {
+				themeColor = space.landing_page_content.theme.primaryColor
 			}
+
+			await loadPosts()
 		} catch (err: any) {
 			error = err.message
-		} finally {
 			loading = false
 		}
 	}
 
 	async function loadPosts() {
-		if (!selectedSpace) return
+		if (!space) return
 
 		loading = true
 		try {
-			const response = await fetch(`/api/blog?space_id=${selectedSpace}&include_unpublished=true`)
+			const response = await fetch(`/api/blog?space_id=${space.id}&include_unpublished=true`)
 			const result = await response.json()
 
 			if (!response.ok) {
@@ -71,18 +64,6 @@
 		}
 	}
 
-	// スペース変更時に記事を再取得
-	$: if (selectedSpace && initialized) {
-		loadPosts()
-		// テーマカラー更新
-		const space = spaces.find(s => s.id === selectedSpace)
-		if (space?.landing_page_content?.theme?.primaryColor) {
-			themeColor = space.landing_page_content.theme.primaryColor
-		} else {
-			themeColor = '#3B82F6'
-		}
-	}
-
 	function generateSlug(title: string): string {
 		return title
 			.toLowerCase()
@@ -92,7 +73,7 @@
 	}
 
 	async function createPost() {
-		if (!newPostTitle.trim() || !selectedSpace) return
+		if (!newPostTitle.trim() || !space) return
 
 		creating = true
 		try {
@@ -102,7 +83,7 @@
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
-					space_id: selectedSpace,
+					space_id: space.id,
 					title: newPostTitle,
 					slug,
 					content: '',
@@ -173,25 +154,23 @@
 	function formatDate(dateString: string): string {
 		return new Date(dateString).toLocaleDateString('ja-JP')
 	}
-
-	function getSpaceSlug(spaceId: string): string {
-		const space = spaces.find(s => s.id === spaceId)
-		return space?.slug || ''
-	}
 </script>
 
 <div>
 	<div class="flex justify-between items-center mb-6">
-		<h2 class="text-2xl font-bold text-gray-900">ブログ管理</h2>
-		{#if spaces.length > 0}
-			<button
-				on:click={() => showCreateModal = true}
-				class="text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
-				style="background-color: {themeColor}"
-			>
-				新規記事作成
-			</button>
-		{/if}
+		<div>
+			<a href="/{username}/spaces/{spaceSlug}" class="text-sm text-gray-500 hover:text-gray-700 mb-1 inline-block">
+				&larr; {space?.title || 'スペース'}に戻る
+			</a>
+			<h2 class="text-2xl font-bold text-gray-900">ブログ管理</h2>
+		</div>
+		<button
+			on:click={() => showCreateModal = true}
+			class="text-white px-4 py-2 rounded-lg font-medium hover:opacity-90 transition-opacity"
+			style="background-color: {themeColor}"
+		>
+			新規記事作成
+		</button>
 	</div>
 
 	{#if error}
@@ -200,46 +179,12 @@
 		</div>
 	{/if}
 
-	<!-- スペース選択 -->
-	{#if spaces.length > 0}
-		<div class="bg-white rounded-lg shadow p-4 mb-6">
-			<div class="flex items-center space-x-4">
-				<label for="spaceFilter" class="text-sm font-medium text-gray-700">
-					スペースを選択:
-				</label>
-				<select
-					id="spaceFilter"
-					bind:value={selectedSpace}
-					class="border border-gray-300 rounded-md px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-				>
-					{#each spaces as space}
-						<option value={space.id}>{space.title}</option>
-					{/each}
-				</select>
-			</div>
-		</div>
-	{/if}
-
 	{#if loading}
 		<div class="flex justify-center items-center h-64">
-			<div class="animate-spin rounded-full h-12 w-12 border-b-2 border-blue-600"></div>
-		</div>
-	{:else if spaces.length === 0}
-		<div class="text-center py-12">
-			<svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"/>
-			</svg>
-			<h3 class="text-lg font-medium text-gray-900 mb-2">スペースがありません</h3>
-			<p class="text-gray-600 mb-6">ブログ記事を作成するには、まずスペースが必要です。</p>
-			<a
-				href="/{username}/spaces/create"
-				class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700"
-			>
-				スペースを作成
-			</a>
+			<div class="animate-spin rounded-full h-12 w-12 border-b-2" style="border-color: {themeColor}"></div>
 		</div>
 	{:else if posts.length === 0}
-		<div class="text-center py-12">
+		<div class="text-center py-12 bg-white rounded-lg shadow">
 			<svg class="mx-auto h-12 w-12 text-gray-400 mb-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 				<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 20H5a2 2 0 01-2-2V6a2 2 0 012-2h10a2 2 0 012 2v1m2 13a2 2 0 01-2-2V7m2 13a2 2 0 002-2V9a2 2 0 00-2-2h-2m-4-3H9M7 16h6M7 8h6v4H7V8z"/>
 			</svg>
@@ -278,7 +223,7 @@
 							</div>
 							<div class="flex space-x-2 ml-4">
 								<a
-									href="/{username}/space/{getSpaceSlug(post.space_id)}/blog/{post.slug}"
+									href="/{username}/space/{spaceSlug}/blog/{post.slug}"
 									target="_blank"
 									class="text-sm bg-green-100 text-green-700 px-3 py-1 rounded hover:bg-green-200 transition-colors"
 									title="公開ページを確認"
@@ -289,7 +234,7 @@
 									表示
 								</a>
 								<a
-									href="/{username}/blog/{post.id}"
+									href="/{username}/spaces/{spaceSlug}/blog/{post.id}"
 									class="text-sm bg-blue-100 text-blue-700 px-3 py-1 rounded hover:bg-blue-200 transition-colors"
 								>
 									編集

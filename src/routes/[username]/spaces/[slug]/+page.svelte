@@ -87,6 +87,12 @@
 					編集
 				</a>
 				<a
+					href="/{username}/spaces/{slug}/blog"
+					class="bg-purple-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-purple-700 transition-colors"
+				>
+					ブログ管理
+				</a>
+				<a
 					href="/{username}/spaces/{slug}/page-editor"
 					class="bg-blue-600 text-white px-4 py-2 rounded-lg font-medium hover:bg-blue-700 transition-colors"
 				>
